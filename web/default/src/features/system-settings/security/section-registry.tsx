@@ -37,6 +37,20 @@ const SECURITY_SECTIONS = [
           ModelRequestRateLimitDurationMinutes:
             settings.ModelRequestRateLimitDurationMinutes,
           ModelRequestRateLimitGroup: settings.ModelRequestRateLimitGroup,
+          AccountFiveHourRateLimitEnabled:
+            settings.AccountFiveHourRateLimitEnabled,
+          AccountFiveHourRateLimitCount: settings.AccountFiveHourRateLimitCount,
+          AccountFiveHourRateLimitSuccessCount:
+            settings.AccountFiveHourRateLimitSuccessCount,
+          AccountFiveHourRateLimitGroup:
+            settings.AccountFiveHourRateLimitGroup,
+          AccountWeeklyRateLimitEnabled:
+            settings.AccountWeeklyRateLimitEnabled,
+          AccountWeeklyRateLimitCount: settings.AccountWeeklyRateLimitCount,
+          AccountWeeklyRateLimitSuccessCount:
+            settings.AccountWeeklyRateLimitSuccessCount,
+          AccountWeeklyRateLimitGroup:
+            settings.AccountWeeklyRateLimitGroup,
         }}
       />
     ),

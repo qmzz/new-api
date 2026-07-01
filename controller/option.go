@@ -277,6 +277,24 @@ func UpdateOption(c *gin.Context) {
 			})
 			return
 		}
+	case "AccountFiveHourRateLimitGroup":
+		err = setting.CheckAccountFiveHourRateLimitGroup(option.Value.(string))
+		if err != nil {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": err.Error(),
+			})
+			return
+		}
+	case "AccountWeeklyRateLimitGroup":
+		err = setting.CheckAccountWeeklyRateLimitGroup(option.Value.(string))
+		if err != nil {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": err.Error(),
+			})
+			return
+		}
 	case "AutomaticDisableStatusCodes":
 		_, err = operation_setting.ParseHTTPStatusCodeRanges(option.Value.(string))
 		if err != nil {

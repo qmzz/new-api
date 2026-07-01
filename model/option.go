@@ -139,6 +139,14 @@ func InitOptionMap() {
 	common.OptionMap["ModelRequestRateLimitDurationMinutes"] = strconv.Itoa(setting.ModelRequestRateLimitDurationMinutes)
 	common.OptionMap["ModelRequestRateLimitSuccessCount"] = strconv.Itoa(setting.ModelRequestRateLimitSuccessCount)
 	common.OptionMap["ModelRequestRateLimitGroup"] = setting.ModelRequestRateLimitGroup2JSONString()
+	common.OptionMap["AccountFiveHourRateLimitEnabled"] = strconv.FormatBool(setting.AccountFiveHourRateLimitEnabled)
+	common.OptionMap["AccountFiveHourRateLimitCount"] = strconv.Itoa(setting.AccountFiveHourRateLimitCount)
+	common.OptionMap["AccountFiveHourRateLimitSuccessCount"] = strconv.Itoa(setting.AccountFiveHourRateLimitSuccessCount)
+	common.OptionMap["AccountFiveHourRateLimitGroup"] = setting.AccountFiveHourRateLimitGroup2JSONString()
+	common.OptionMap["AccountWeeklyRateLimitEnabled"] = strconv.FormatBool(setting.AccountWeeklyRateLimitEnabled)
+	common.OptionMap["AccountWeeklyRateLimitCount"] = strconv.Itoa(setting.AccountWeeklyRateLimitCount)
+	common.OptionMap["AccountWeeklyRateLimitSuccessCount"] = strconv.Itoa(setting.AccountWeeklyRateLimitSuccessCount)
+	common.OptionMap["AccountWeeklyRateLimitGroup"] = setting.AccountWeeklyRateLimitGroup2JSONString()
 	common.OptionMap["ModelRatio"] = ratio_setting.ModelRatio2JSONString()
 	common.OptionMap["ModelPrice"] = ratio_setting.ModelPrice2JSONString()
 	common.OptionMap["CacheRatio"] = ratio_setting.CacheRatio2JSONString()
@@ -348,6 +356,10 @@ func updateOptionMap(key string, value string) (err error) {
 			setting.CheckSensitiveOnPromptEnabled = boolValue
 		case "ModelRequestRateLimitEnabled":
 			setting.ModelRequestRateLimitEnabled = boolValue
+		case "AccountFiveHourRateLimitEnabled":
+			setting.AccountFiveHourRateLimitEnabled = boolValue
+		case "AccountWeeklyRateLimitEnabled":
+			setting.AccountWeeklyRateLimitEnabled = boolValue
 		case "StopOnSensitiveEnabled":
 			setting.StopOnSensitiveEnabled = boolValue
 		case "SMTPSSLEnabled":
@@ -518,6 +530,18 @@ func updateOptionMap(key string, value string) (err error) {
 		setting.ModelRequestRateLimitSuccessCount, _ = strconv.Atoi(value)
 	case "ModelRequestRateLimitGroup":
 		err = setting.UpdateModelRequestRateLimitGroupByJSONString(value)
+	case "AccountFiveHourRateLimitCount":
+		setting.AccountFiveHourRateLimitCount, _ = strconv.Atoi(value)
+	case "AccountFiveHourRateLimitSuccessCount":
+		setting.AccountFiveHourRateLimitSuccessCount, _ = strconv.Atoi(value)
+	case "AccountFiveHourRateLimitGroup":
+		err = setting.UpdateAccountFiveHourRateLimitGroupByJSONString(value)
+	case "AccountWeeklyRateLimitCount":
+		setting.AccountWeeklyRateLimitCount, _ = strconv.Atoi(value)
+	case "AccountWeeklyRateLimitSuccessCount":
+		setting.AccountWeeklyRateLimitSuccessCount, _ = strconv.Atoi(value)
+	case "AccountWeeklyRateLimitGroup":
+		err = setting.UpdateAccountWeeklyRateLimitGroupByJSONString(value)
 	case "RetryTimes":
 		common.RetryTimes, _ = strconv.Atoi(value)
 	case "DataExportInterval":

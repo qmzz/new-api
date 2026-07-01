@@ -1,7 +1,6 @@
 package setting
 
 import (
-	"encoding/json"
 	"fmt"
 	"math"
 	"sync"
@@ -16,47 +15,65 @@ var ModelRequestRateLimitSuccessCount = 1000
 var ModelRequestRateLimitGroup = map[string][2]int{}
 var ModelRequestRateLimitMutex sync.RWMutex
 
-func ModelRequestRateLimitGroup2JSONString() string {
-	ModelRequestRateLimitMutex.RLock()
-	defer ModelRequestRateLimitMutex.RUnlock()
+// Account-level 5-hour window (300 minutes).
+var AccountFiveHourRateLimitEnabled = false
+var AccountFiveHourRateLimitCount = 0
+var AccountFiveHourRateLimitSuccessCount = 0
+var AccountFiveHourRateLimitGroup = map[string][2]int{}
+var AccountFiveHourRateLimitMutex sync.RWMutex
 
-	jsonBytes, err := json.Marshal(ModelRequestRateLimitGroup)
+// Account-level weekly window (7 days = 168 hours = 10080 minutes).
+var AccountWeeklyRateLimitEnabled = false
+var AccountWeeklyRateLimitCount = 0
+var AccountWeeklyRateLimitSuccessCount = 0
+var AccountWeeklyRateLimitGroup = map[string][2]int{}
+var AccountWeeklyRateLimitMutex sync.RWMutex
+
+// rateLimitGroup2JSONString serializes a rate-limit group map under its mutex.
+func rateLimitGroup2JSONString(m map[string][2]int, mu *sync.RWMutex) string {
+	mu.RLock()
+	defer mu.RUnlock()
+
+	jsonBytes, err := common.Marshal(m)
 	if err != nil {
-		common.SysLog("error marshalling model ratio: " + err.Error())
+		common.SysLog("error marshalling rate limit group: " + err.Error())
 	}
 	return string(jsonBytes)
 }
 
-func UpdateModelRequestRateLimitGroupByJSONString(jsonStr string) error {
-	ModelRequestRateLimitMutex.RLock()
-	defer ModelRequestRateLimitMutex.RUnlock()
+// updateRateLimitGroupByJSONString replaces a rate-limit group map from JSON.
+func updateRateLimitGroupByJSONString(jsonStr string, m *map[string][2]int, mu *sync.RWMutex) error {
+	mu.Lock()
+	defer mu.Unlock()
 
-	ModelRequestRateLimitGroup = make(map[string][2]int)
-	return json.Unmarshal([]byte(jsonStr), &ModelRequestRateLimitGroup)
+	*m = make(map[string][2]int)
+	return common.Unmarshal([]byte(jsonStr), m)
 }
 
-func GetGroupRateLimit(group string) (totalCount, successCount int, found bool) {
-	ModelRequestRateLimitMutex.RLock()
-	defer ModelRequestRateLimitMutex.RUnlock()
+// getGroupRateLimit looks up a group's [total, success] limits.
+func getGroupRateLimit(group string, m map[string][2]int, mu *sync.RWMutex) (totalCount, successCount int, found bool) {
+	mu.RLock()
+	defer mu.RUnlock()
 
-	if ModelRequestRateLimitGroup == nil {
+	if m == nil {
 		return 0, 0, false
 	}
 
-	limits, found := ModelRequestRateLimitGroup[group]
+	limits, found := m[group]
 	if !found {
 		return 0, 0, false
 	}
 	return limits[0], limits[1], true
 }
 
-func CheckModelRequestRateLimitGroup(jsonStr string) error {
-	checkModelRequestRateLimitGroup := make(map[string][2]int)
-	err := json.Unmarshal([]byte(jsonStr), &checkModelRequestRateLimitGroup)
-	if err != nil {
+// checkRateLimitGroup validates a JSON rate-limit group map: total >= 0,
+// success >= 1, both within int32 range.
+func checkRateLimitGroup(jsonStr string) error {
+	check := make(map[string][2]int)
+	if err := common.Unmarshal([]byte(jsonStr), &check); err != nil {
 		return err
 	}
-	for group, limits := range checkModelRequestRateLimitGroup {
+	for group, limits := range check {
 		if limits[0] < 0 || limits[1] < 1 {
 			return fmt.Errorf("group %s has negative rate limit values: [%d, %d]", group, limits[0], limits[1])
 		}
@@ -66,4 +83,58 @@ func CheckModelRequestRateLimitGroup(jsonStr string) error {
 	}
 
 	return nil
+}
+
+// --- Minute window (existing API, delegates to generic helpers) ---
+
+func ModelRequestRateLimitGroup2JSONString() string {
+	return rateLimitGroup2JSONString(ModelRequestRateLimitGroup, &ModelRequestRateLimitMutex)
+}
+
+func UpdateModelRequestRateLimitGroupByJSONString(jsonStr string) error {
+	return updateRateLimitGroupByJSONString(jsonStr, &ModelRequestRateLimitGroup, &ModelRequestRateLimitMutex)
+}
+
+func GetGroupRateLimit(group string) (totalCount, successCount int, found bool) {
+	return getGroupRateLimit(group, ModelRequestRateLimitGroup, &ModelRequestRateLimitMutex)
+}
+
+func CheckModelRequestRateLimitGroup(jsonStr string) error {
+	return checkRateLimitGroup(jsonStr)
+}
+
+// --- 5-hour window ---
+
+func AccountFiveHourRateLimitGroup2JSONString() string {
+	return rateLimitGroup2JSONString(AccountFiveHourRateLimitGroup, &AccountFiveHourRateLimitMutex)
+}
+
+func UpdateAccountFiveHourRateLimitGroupByJSONString(jsonStr string) error {
+	return updateRateLimitGroupByJSONString(jsonStr, &AccountFiveHourRateLimitGroup, &AccountFiveHourRateLimitMutex)
+}
+
+func GetAccountFiveHourRateLimitGroup(group string) (totalCount, successCount int, found bool) {
+	return getGroupRateLimit(group, AccountFiveHourRateLimitGroup, &AccountFiveHourRateLimitMutex)
+}
+
+func CheckAccountFiveHourRateLimitGroup(jsonStr string) error {
+	return checkRateLimitGroup(jsonStr)
+}
+
+// --- Weekly window ---
+
+func AccountWeeklyRateLimitGroup2JSONString() string {
+	return rateLimitGroup2JSONString(AccountWeeklyRateLimitGroup, &AccountWeeklyRateLimitMutex)
+}
+
+func UpdateAccountWeeklyRateLimitGroupByJSONString(jsonStr string) error {
+	return updateRateLimitGroupByJSONString(jsonStr, &AccountWeeklyRateLimitGroup, &AccountWeeklyRateLimitMutex)
+}
+
+func GetAccountWeeklyRateLimitGroup(group string) (totalCount, successCount int, found bool) {
+	return getGroupRateLimit(group, AccountWeeklyRateLimitGroup, &AccountWeeklyRateLimitMutex)
+}
+
+func CheckAccountWeeklyRateLimitGroup(jsonStr string) error {
+	return checkRateLimitGroup(jsonStr)
 }

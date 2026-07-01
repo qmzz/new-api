@@ -19,10 +19,32 @@ import (
 const (
 	ModelRequestRateLimitCountMark        = "MRRL"
 	ModelRequestRateLimitSuccessCountMark = "MRRLS"
+	AccountFiveHourRateLimitMark          = "5H"
+	AccountWeeklyRateLimitMark            = "1W"
 )
 
+// Dedicated in-memory limiters for the long windows so their cleanup
+// expiration matches the window size instead of the shared limiter's.
+var accountFiveHourRateLimiter common.InMemoryRateLimiter
+var accountWeeklyRateLimiter common.InMemoryRateLimiter
+
+// rateLimitWindow describes one rate-limit window to check and record.
+type rateLimitWindow struct {
+	durationSeconds   int64
+	durationMinutes   int
+	totalMaxCount     int
+	successMaxCount   int
+	redisTotalKey     string // token-bucket key
+	redisSuccessKey   string // sliding-window list key
+	memTotalKey       string
+	memSuccessKey     string
+	memLimiter        *common.InMemoryRateLimiter
+	successBlockedMsg string
+	totalBlockedMsg   string
+}
+
 // 检查Redis中的请求限制
-func checkRedisRateLimit(ctx context.Context, rdb *redis.Client, key string, maxCount int, duration int64) (bool, error) {
+func checkRedisRateLimit(ctx context.Context, rdb *redis.Client, key string, maxCount int, durationSeconds int64) (bool, error) {
 	// 如果maxCount为0，表示不限制
 	if maxCount == 0 {
 		return true, nil
@@ -53,8 +75,8 @@ func checkRedisRateLimit(ctx context.Context, rdb *redis.Client, key string, max
 	}
 	// 如果在时间窗口内已达到限制，拒绝请求
 	subTime := nowTime.Sub(oldTime).Seconds()
-	if int64(subTime) < duration {
-		rdb.Expire(ctx, key, time.Duration(setting.ModelRequestRateLimitDurationMinutes)*time.Minute)
+	if int64(subTime) < durationSeconds {
+		rdb.Expire(ctx, key, time.Duration(durationSeconds)*time.Second)
 		return false, nil
 	}
 
@@ -62,7 +84,7 @@ func checkRedisRateLimit(ctx context.Context, rdb *redis.Client, key string, max
 }
 
 // 记录Redis请求
-func recordRedisRequest(ctx context.Context, rdb *redis.Client, key string, maxCount int) {
+func recordRedisRequest(ctx context.Context, rdb *redis.Client, key string, maxCount int, durationSeconds int64) {
 	// 如果maxCount为0，不记录请求
 	if maxCount == 0 {
 		return
@@ -71,111 +93,155 @@ func recordRedisRequest(ctx context.Context, rdb *redis.Client, key string, maxC
 	now := time.Now().Format(timeFormat)
 	rdb.LPush(ctx, key, now)
 	rdb.LTrim(ctx, key, 0, int64(maxCount-1))
-	rdb.Expire(ctx, key, time.Duration(setting.ModelRequestRateLimitDurationMinutes)*time.Minute)
+	rdb.Expire(ctx, key, time.Duration(durationSeconds)*time.Second)
 }
 
-// Redis限流处理器
-func redisRateLimitHandler(duration int64, totalMaxCount, successMaxCount int) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		userId := strconv.Itoa(c.GetInt("id"))
-		ctx := context.Background()
-		rdb := common.RDB
+// checkRedisWindow checks the success and total limits for a window.
+func checkRedisWindow(ctx context.Context, rdb *redis.Client, w rateLimitWindow) (bool, string, error) {
+	// 1. 检查成功请求数限制
+	allowed, err := checkRedisRateLimit(ctx, rdb, w.redisSuccessKey, w.successMaxCount, w.durationSeconds)
+	if err != nil {
+		return false, "", err
+	}
+	if !allowed {
+		return false, w.successBlockedMsg, nil
+	}
 
-		// 1. 检查成功请求数限制
-		successKey := fmt.Sprintf("rateLimit:%s:%s", ModelRequestRateLimitSuccessCountMark, userId)
-		allowed, err := checkRedisRateLimit(ctx, rdb, successKey, successMaxCount, duration)
+	// 2. 检查总请求数限制（令牌桶，totalMaxCount为0时跳过）
+	if w.totalMaxCount > 0 {
+		tb := limiter.New(ctx, rdb)
+		allowed, err = tb.Allow(
+			ctx,
+			w.redisTotalKey,
+			limiter.WithCapacity(int64(w.totalMaxCount)*w.durationSeconds),
+			limiter.WithRate(int64(w.totalMaxCount)),
+			limiter.WithRequested(w.durationSeconds),
+		)
 		if err != nil {
-			fmt.Println("检查成功请求数限制失败:", err.Error())
-			abortWithOpenAiMessage(c, http.StatusInternalServerError, "rate_limit_check_failed")
-			return
+			return false, "", err
 		}
 		if !allowed {
-			abortWithOpenAiMessage(c, http.StatusTooManyRequests, fmt.Sprintf("您已达到请求数限制：%d分钟内最多请求%d次", setting.ModelRequestRateLimitDurationMinutes, successMaxCount))
-			return
+			return false, w.totalBlockedMsg, nil
 		}
+	}
 
-		//2.检查总请求数限制并记录总请求（当totalMaxCount为0时会自动跳过，使用令牌桶限流器
-		if totalMaxCount > 0 {
-			totalKey := fmt.Sprintf("rateLimit:%s", userId)
-			// 初始化
-			tb := limiter.New(ctx, rdb)
-			allowed, err = tb.Allow(
-				ctx,
-				totalKey,
-				limiter.WithCapacity(int64(totalMaxCount)*duration),
-				limiter.WithRate(int64(totalMaxCount)),
-				limiter.WithRequested(duration),
-			)
+	return true, "", nil
+}
 
-			if err != nil {
-				fmt.Println("检查总请求数限制失败:", err.Error())
-				abortWithOpenAiMessage(c, http.StatusInternalServerError, "rate_limit_check_failed")
-				return
-			}
+// recordRedisSuccess records a successful request for a window.
+func recordRedisSuccess(ctx context.Context, rdb *redis.Client, w rateLimitWindow) {
+	recordRedisRequest(ctx, rdb, w.redisSuccessKey, w.successMaxCount, w.durationSeconds)
+}
 
-			if !allowed {
-				abortWithOpenAiMessage(c, http.StatusTooManyRequests, fmt.Sprintf("您已达到总请求数限制：%d分钟内最多请求%d次，包括失败次数，请检查您的请求是否正确", setting.ModelRequestRateLimitDurationMinutes, totalMaxCount))
-			}
+// checkMemoryWindow checks the success and total limits for a window in memory.
+func checkMemoryWindow(w rateLimitWindow) (bool, string) {
+	w.memLimiter.Init(time.Duration(w.durationMinutes) * time.Minute)
+
+	// 1. 检查总请求数限制（totalMaxCount为0时跳过）
+	if w.totalMaxCount > 0 && !w.memLimiter.Request(w.memTotalKey, w.totalMaxCount, w.durationSeconds) {
+		return false, w.totalBlockedMsg
+	}
+
+	// 2. 检查成功请求数限制（successMaxCount为0时跳过，表示不限制）
+	if w.successMaxCount > 0 {
+		checkKey := w.memSuccessKey + "_check"
+		if !w.memLimiter.Request(checkKey, w.successMaxCount, w.durationSeconds) {
+			return false, w.successBlockedMsg
 		}
+	}
 
-		// 4. 处理请求
-		c.Next()
+	return true, ""
+}
 
-		// 5. 如果请求成功，记录成功请求
-		if c.Writer.Status() < 400 {
-			recordRedisRequest(ctx, rdb, successKey, successMaxCount)
-		}
+// recordMemorySuccess records a successful request for a window in memory.
+func recordMemorySuccess(w rateLimitWindow) {
+	if w.successMaxCount > 0 {
+		w.memLimiter.Request(w.memSuccessKey, w.successMaxCount, w.durationSeconds)
 	}
 }
 
-// 内存限流处理器
-func memoryRateLimitHandler(duration int64, totalMaxCount, successMaxCount int) gin.HandlerFunc {
-	inMemoryRateLimiter.Init(time.Duration(setting.ModelRequestRateLimitDurationMinutes) * time.Minute)
+// buildRateLimitWindows assembles the enabled rate-limit windows for a request.
+func buildRateLimitWindows(userId, group string) []rateLimitWindow {
+	var windows []rateLimitWindow
 
-	return func(c *gin.Context) {
-		userId := strconv.Itoa(c.GetInt("id"))
-		totalKey := ModelRequestRateLimitCountMark + userId
-		successKey := ModelRequestRateLimitSuccessCountMark + userId
-
-		// 1. 检查总请求数限制（当totalMaxCount为0时跳过）
-		if totalMaxCount > 0 && !inMemoryRateLimiter.Request(totalKey, totalMaxCount, duration) {
-			c.Status(http.StatusTooManyRequests)
-			c.Abort()
-			return
+	// 分钟窗口
+	if setting.ModelRequestRateLimitEnabled {
+		totalMaxCount := setting.ModelRequestRateLimitCount
+		successMaxCount := setting.ModelRequestRateLimitSuccessCount
+		if gt, gs, found := setting.GetGroupRateLimit(group); found {
+			totalMaxCount = gt
+			successMaxCount = gs
 		}
-
-		// 2. 检查成功请求数限制
-		// 使用一个临时key来检查限制，这样可以避免实际记录
-		checkKey := successKey + "_check"
-		if !inMemoryRateLimiter.Request(checkKey, successMaxCount, duration) {
-			c.Status(http.StatusTooManyRequests)
-			c.Abort()
-			return
-		}
-
-		// 3. 处理请求
-		c.Next()
-
-		// 4. 如果请求成功，记录到实际的成功请求计数中
-		if c.Writer.Status() < 400 {
-			inMemoryRateLimiter.Request(successKey, successMaxCount, duration)
-		}
+		windows = append(windows, rateLimitWindow{
+			durationSeconds: int64(setting.ModelRequestRateLimitDurationMinutes * 60),
+			durationMinutes: setting.ModelRequestRateLimitDurationMinutes,
+			totalMaxCount:   totalMaxCount,
+			successMaxCount: successMaxCount,
+			redisTotalKey:   fmt.Sprintf("rateLimit:%s", userId),
+			redisSuccessKey: fmt.Sprintf("rateLimit:%s:%s", ModelRequestRateLimitSuccessCountMark, userId),
+			memTotalKey:     ModelRequestRateLimitCountMark + userId,
+			memSuccessKey:   ModelRequestRateLimitSuccessCountMark + userId,
+			memLimiter:      &inMemoryRateLimiter,
+			successBlockedMsg: fmt.Sprintf("您已达到请求数限制：%d分钟内最多请求%d次",
+				setting.ModelRequestRateLimitDurationMinutes, successMaxCount),
+			totalBlockedMsg: fmt.Sprintf("您已达到总请求数限制：%d分钟内最多请求%d次，包括失败次数，请检查您的请求是否正确",
+				setting.ModelRequestRateLimitDurationMinutes, totalMaxCount),
+		})
 	}
+
+	// 5小时窗口
+	if setting.AccountFiveHourRateLimitEnabled {
+		totalMaxCount := setting.AccountFiveHourRateLimitCount
+		successMaxCount := setting.AccountFiveHourRateLimitSuccessCount
+		if gt, gs, found := setting.GetAccountFiveHourRateLimitGroup(group); found {
+			totalMaxCount = gt
+			successMaxCount = gs
+		}
+		windows = append(windows, rateLimitWindow{
+			durationSeconds: 5 * 60 * 60,
+			durationMinutes: 300,
+			totalMaxCount:   totalMaxCount,
+			successMaxCount: successMaxCount,
+			redisTotalKey:   fmt.Sprintf("rateLimit:%s:%s", AccountFiveHourRateLimitMark, userId),
+			redisSuccessKey: fmt.Sprintf("rateLimit:%s:%s:%s", AccountFiveHourRateLimitMark, "S", userId),
+			memTotalKey:     AccountFiveHourRateLimitMark + userId,
+			memSuccessKey:   AccountFiveHourRateLimitMark + "S" + userId,
+			memLimiter:      &accountFiveHourRateLimiter,
+			successBlockedMsg: fmt.Sprintf("您已达到5小时请求数限制：5小时内最多请求%d次", successMaxCount),
+			totalBlockedMsg:   fmt.Sprintf("您已达到5小时总请求数限制：5小时内最多请求%d次，包括失败次数，请检查您的请求是否正确", totalMaxCount),
+		})
+	}
+
+	// 周窗口（7天）
+	if setting.AccountWeeklyRateLimitEnabled {
+		totalMaxCount := setting.AccountWeeklyRateLimitCount
+		successMaxCount := setting.AccountWeeklyRateLimitSuccessCount
+		if gt, gs, found := setting.GetAccountWeeklyRateLimitGroup(group); found {
+			totalMaxCount = gt
+			successMaxCount = gs
+		}
+		windows = append(windows, rateLimitWindow{
+			durationSeconds: 7 * 24 * 60 * 60,
+			durationMinutes: 7 * 24 * 60,
+			totalMaxCount:   totalMaxCount,
+			successMaxCount: successMaxCount,
+			redisTotalKey:   fmt.Sprintf("rateLimit:%s:%s", AccountWeeklyRateLimitMark, userId),
+			redisSuccessKey: fmt.Sprintf("rateLimit:%s:%s:%s", AccountWeeklyRateLimitMark, "S", userId),
+			memTotalKey:     AccountWeeklyRateLimitMark + userId,
+			memSuccessKey:   AccountWeeklyRateLimitMark + "S" + userId,
+			memLimiter:      &accountWeeklyRateLimiter,
+			successBlockedMsg: fmt.Sprintf("您已达到周请求数限制：7天内最多请求%d次", successMaxCount),
+			totalBlockedMsg:   fmt.Sprintf("您已达到周总请求数限制：7天内最多请求%d次，包括失败次数，请检查您的请求是否正确", totalMaxCount),
+		})
+	}
+
+	return windows
 }
 
 // ModelRequestRateLimit 模型请求限流中间件
 func ModelRequestRateLimit() func(c *gin.Context) {
 	return func(c *gin.Context) {
-		// 在每个请求时检查是否启用限流
-		if !setting.ModelRequestRateLimitEnabled {
-			c.Next()
-			return
-		}
-
-		// 计算限流参数
-		duration := int64(setting.ModelRequestRateLimitDurationMinutes * 60)
-		totalMaxCount := setting.ModelRequestRateLimitCount
-		successMaxCount := setting.ModelRequestRateLimitSuccessCount
+		userId := strconv.Itoa(c.GetInt("id"))
 
 		// 获取分组
 		group := common.GetContextKeyString(c, constant.ContextKeyTokenGroup)
@@ -183,18 +249,58 @@ func ModelRequestRateLimit() func(c *gin.Context) {
 			group = common.GetContextKeyString(c, constant.ContextKeyUserGroup)
 		}
 
-		//获取分组的限流配置
-		groupTotalCount, groupSuccessCount, found := setting.GetGroupRateLimit(group)
-		if found {
-			totalMaxCount = groupTotalCount
-			successMaxCount = groupSuccessCount
+		windows := buildRateLimitWindows(userId, group)
+		if len(windows) == 0 {
+			c.Next()
+			return
 		}
 
-		// 根据存储类型选择并执行限流处理器
+		ctx := context.Background()
+
 		if common.RedisEnabled {
-			redisRateLimitHandler(duration, totalMaxCount, successMaxCount)(c)
+			rdb := common.RDB
+			// 检查所有启用窗口
+			for _, w := range windows {
+				allowed, msg, err := checkRedisWindow(ctx, rdb, w)
+				if err != nil {
+					fmt.Println("检查请求限制失败:", err.Error())
+					abortWithOpenAiMessage(c, http.StatusInternalServerError, "rate_limit_check_failed")
+					return
+				}
+				if !allowed {
+					abortWithOpenAiMessage(c, http.StatusTooManyRequests, msg)
+					return
+				}
+			}
+
+			// 处理请求
+			c.Next()
+
+			// 如果请求成功，记录成功请求
+			if c.Writer.Status() < 400 {
+				for _, w := range windows {
+					recordRedisSuccess(ctx, rdb, w)
+				}
+			}
 		} else {
-			memoryRateLimitHandler(duration, totalMaxCount, successMaxCount)(c)
+			// 检查所有启用窗口
+			for _, w := range windows {
+				allowed, msg := checkMemoryWindow(w)
+				if !allowed {
+					abortWithOpenAiMessage(c, http.StatusTooManyRequests, msg)
+					return
+				}
+			}
+
+			// 处理请求
+			c.Next()
+
+			// 如果请求成功，记录成功请求
+			if c.Writer.Status() < 400 {
+				for _, w := range windows {
+					recordMemorySuccess(w)
+				}
+			}
 		}
 	}
 }

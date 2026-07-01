@@ -367,6 +367,14 @@ export type SecuritySettings = {
   ModelRequestRateLimitSuccessCount: number
   ModelRequestRateLimitDurationMinutes: number
   ModelRequestRateLimitGroup: string
+  AccountFiveHourRateLimitEnabled: boolean
+  AccountFiveHourRateLimitCount: number
+  AccountFiveHourRateLimitSuccessCount: number
+  AccountFiveHourRateLimitGroup: string
+  AccountWeeklyRateLimitEnabled: boolean
+  AccountWeeklyRateLimitCount: number
+  AccountWeeklyRateLimitSuccessCount: number
+  AccountWeeklyRateLimitGroup: string
   CheckSensitiveEnabled: boolean
   CheckSensitiveOnPromptEnabled: boolean
   SensitiveWords: string

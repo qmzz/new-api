@@ -1950,7 +1950,7 @@
     "footer.columns.related.links.oneApi": "One API",
     "footer.columns.related.title": "Related Projects",
     "footer.defaultCopyright": "All rights reserved.",
-    "footer.new\u0061pi.projectAttributionSuffix": "All rights reserved. Designed and developed by the project contributors.",
+    "footer.newapi.projectAttributionSuffix": "All rights reserved. Designed and developed by the project contributors.",
     "For channels added after May 10, 2025, no need to remove \".\" from model names during deployment": "For channels added after May 10, 2025, no need to remove \".\" from model names during deployment",
     "For private deployments, format: https://fastgpt.run/api/openapi": "For private deployments, format: https://fastgpt.run/api/openapi",
     "Force a syntactically valid JSON response": "Force a syntactically valid JSON response",
@@ -4977,6 +4977,16 @@
     "Zero retention": "Zero retention",
     "Zhipu": "Zhipu",
     "Zhipu V4": "Zhipu V4",
-    "Zoom": "Zoom"
+    "Zoom": "Zoom",
+    "5-Hour Window Rate Limit": "5-Hour Window Rate Limit",
+    "Weekly Window Rate Limit": "Weekly Window Rate Limit",
+    "Limits total and successful requests per user account within a rolling 5-hour window. Overrides per-group configuration.": "Limits total and successful requests per user account within a rolling 5-hour window. Overrides per-group configuration.",
+    "Limits total and successful requests per user account within a rolling 7-day window. Overrides per-group configuration.": "Limits total and successful requests per user account within a rolling 7-day window. Overrides per-group configuration.",
+    "Only successful requests, 0 = use total count": "Only successful requests, 0 = use total count",
+    "totalCount ≥ 0, successCount ≥ 1, both ≤ 2,147,483,647": "totalCount ≥ 0, successCount ≥ 1, both ≤ 2,147,483,647",
+    "Enable 5-hour account rate limiting": "Enable 5-hour account rate limiting",
+    "Limits total and successful requests per account over a rolling 5-hour window. Applies after model-level checks.": "Limits total and successful requests per account over a rolling 5-hour window. Applies after model-level checks.",
+    "Enable weekly account rate limiting": "Enable weekly account rate limiting",
+    "Limits total and successful requests per account over a rolling 7-day (weekly) window. Applies after model-level checks.": "Limits total and successful requests per account over a rolling 7-day (weekly) window. Applies after model-level checks."
   }
 }

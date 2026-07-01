@@ -1950,7 +1950,7 @@
     "footer.columns.related.links.oneApi": "One API",
     "footer.columns.related.title": "相关项目",
     "footer.defaultCopyright": "版权所有。",
-    "footer.new\u0061pi.projectAttributionSuffix": "版权所有，由项目贡献者设计与开发。",
+    "footer.newapi.projectAttributionSuffix": "版权所有，由项目贡献者设计与开发。",
     "For channels added after May 10, 2025, no need to remove \".\" from model names during deployment": "对于 2025 年 5 月 10 日之后添加的渠道，在部署时无需从模型名称中移除 \".\"",
     "For private deployments, format: https://fastgpt.run/api/openapi": "对于私有部署，格式为：https://fastgpt.run/api/openapi",
     "Force a syntactically valid JSON response": "强制返回语法合法的 JSON",
@@ -4977,6 +4977,16 @@
     "Zero retention": "零数据保留",
     "Zhipu": "智谱",
     "Zhipu V4": "智谱 V4",
-    "Zoom": "缩放"
+    "Zoom": "缩放",
+    "5-Hour Window Rate Limit": "5小时窗口限额",
+    "Weekly Window Rate Limit": "周窗口限额",
+    "Limits total and successful requests per user account within a rolling 5-hour window. Overrides per-group configuration.": "按用户账号限制5小时滚动窗口内的总请求数和成功请求数。分组配置可覆盖全局值。",
+    "Limits total and successful requests per user account within a rolling 7-day window. Overrides per-group configuration.": "按用户账号限制7天滚动窗口内的总请求数和成功请求数。分组配置可覆盖全局值。",
+    "Only successful requests, 0 = use total count": "仅成功请求，0表示使用总请求数",
+    "totalCount ≥ 0, successCount ≥ 1, both ≤ 2,147,483,647": "totalCount ≥ 0, successCount ≥ 1，均不超过 2,147,483,647",
+    "Enable 5-hour account rate limiting": "启用5小时账号限额",
+    "Limits total and successful requests per account over a rolling 5-hour window. Applies after model-level checks.": "按账号限制5小时滚动窗口内的总请求数和成功请求数。在模型级检查之后生效。",
+    "Enable weekly account rate limiting": "启用周账号限额",
+    "Limits total and successful requests per account over a rolling 7-day (weekly) window. Applies after model-level checks.": "按账号限制7天滚动窗口内的总请求数和成功请求数。在模型级检查之后生效。"
   }
 }

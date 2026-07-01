@@ -78,6 +78,24 @@ const createRateLimitSchema = (t: (key: string) => string) =>
       .refine(isValidJSON, {
         message: t('Invalid JSON format or values out of allowed range'),
       }),
+    AccountFiveHourRateLimitEnabled: z.boolean(),
+    AccountFiveHourRateLimitCount: z.number().min(0).max(100000000),
+    AccountFiveHourRateLimitSuccessCount: z.number().min(0).max(100000000),
+    AccountFiveHourRateLimitGroup: z
+      .string()
+      .optional()
+      .refine(isValidJSON, {
+        message: t('Invalid JSON format or values out of allowed range'),
+      }),
+    AccountWeeklyRateLimitEnabled: z.boolean(),
+    AccountWeeklyRateLimitCount: z.number().min(0).max(100000000),
+    AccountWeeklyRateLimitSuccessCount: z.number().min(0).max(100000000),
+    AccountWeeklyRateLimitGroup: z
+      .string()
+      .optional()
+      .refine(isValidJSON, {
+        message: t('Invalid JSON format or values out of allowed range'),
+      }),
   })
 
 type RateLimitFormValues = z.infer<ReturnType<typeof createRateLimitSchema>>
@@ -86,10 +104,242 @@ type RateLimitSectionProps = {
   defaultValues: RateLimitFormValues
 }
 
+// Field names for one rate-limit window. `duration` is only present on the
+// short model-request window; the 5-hour and weekly windows are fixed-length.
+type WindowFieldNames = {
+  enabled: keyof RateLimitFormValues
+  count: keyof RateLimitFormValues
+  success: keyof RateLimitFormValues
+  group: keyof RateLimitFormValues
+  duration?: keyof RateLimitFormValues
+}
+
+type RateLimitWindowCardProps = {
+  control: React.ComponentProps<typeof FormField>['control']
+  fields: WindowFieldNames
+  enableLabel: string
+  enableDescription: string
+  showDuration: boolean
+  // When false (model window), success count falls back to 1 and min is 1,
+  // matching the original behavior. Account-level windows allow 0 = unlimited.
+  successAllowZero?: boolean
+}
+
+// Renders one rate-limit window block: enable toggle, optional duration input,
+// total/success counts, and the per-group config editor (visual or JSON).
+// Shared by the model, 5-hour, and weekly windows to avoid triplicated markup.
+function RateLimitWindowCard({
+  control,
+  fields,
+  enableLabel,
+  enableDescription,
+  showDuration,
+  successAllowZero = false,
+}: RateLimitWindowCardProps) {
+  const successMin = successAllowZero ? 0 : 1
+  const successFallback = successAllowZero ? 0 : 1
+  const { t } = useTranslation()
+  const [useVisualEditor, setUseVisualEditor] = useState(true)
+
+  return (
+    <div className='bg-muted/20 col-span-full rounded-xl border p-4'>
+      <div className='space-y-4'>
+        <FormField
+          control={control}
+          name={fields.enabled as never}
+          render={({ field }) => (
+            <SettingsSwitchItem>
+              <SettingsSwitchContent>
+                <FormLabel>{t(enableLabel)}</FormLabel>
+                <FormDescription>{t(enableDescription)}</FormDescription>
+              </SettingsSwitchContent>
+              <FormControl>
+                <Switch
+                  checked={field.value as boolean}
+                  onCheckedChange={field.onChange}
+                />
+              </FormControl>
+            </SettingsSwitchItem>
+          )}
+        />
+
+        <div className='grid gap-4 md:grid-cols-3'>
+          {showDuration && fields.duration && (
+            <FormField
+              control={control}
+              name={fields.duration as never}
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('Limit period')}</FormLabel>
+                  <FormControl>
+                    <div className='flex items-center gap-2'>
+                      <Input
+                        type='number'
+                        min={0}
+                        step={1}
+                        value={field.value as number}
+                        onChange={(e) =>
+                          field.onChange(parseInt(e.target.value) || 0)
+                        }
+                      />
+                      <span className='text-muted-foreground text-sm'>
+                        {t('minutes')}
+                      </span>
+                    </div>
+                  </FormControl>
+                  <FormDescription>
+                    {t('Time window for rate limiting')}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          )}
+
+          <FormField
+            control={control}
+            name={fields.count as never}
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>{t('Max requests per period')}</FormLabel>
+                <FormControl>
+                  <div className='flex items-center gap-2'>
+                    <Input
+                      type='number'
+                      min={0}
+                      max={100000000}
+                      step={1}
+                      value={field.value as number}
+                      onChange={(e) =>
+                        field.onChange(parseInt(e.target.value) || 0)
+                      }
+                    />
+                    <span className='text-muted-foreground text-sm'>
+                      {t('times')}
+                    </span>
+                  </div>
+                </FormControl>
+                <FormDescription>
+                  {t('Including failed requests, 0 = unlimited')}
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={control}
+            name={fields.success as never}
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>{t('Max successful requests')}</FormLabel>
+                <FormControl>
+                  <div className='flex items-center gap-2'>
+                    <Input
+                      type='number'
+                      min={successMin}
+                      max={100000000}
+                      step={1}
+                      value={field.value as number}
+                      onChange={(e) =>
+                        field.onChange(parseInt(e.target.value) || successFallback)
+                      }
+                    />
+                    <span className='text-muted-foreground text-sm'>
+                      {t('times')}
+                    </span>
+                  </div>
+                </FormControl>
+                <FormDescription>
+                  {t('Only successful requests')}
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+
+        <FormField
+          control={control}
+          name={fields.group as never}
+          render={({ field }) => (
+            <FormItem>
+              <div className='flex items-center justify-between'>
+                <FormLabel>{t('Group-based rate limits')}</FormLabel>
+                <Button
+                  type='button'
+                  variant='outline'
+                  size='sm'
+                  onClick={() => setUseVisualEditor(!useVisualEditor)}
+                >
+                  {useVisualEditor ? (
+                    <>
+                      <Code2 className='mr-2 h-4 w-4' />
+                      {t('JSON Mode')}
+                    </>
+                  ) : (
+                    <>
+                      <Palette className='mr-2 h-4 w-4' />
+                      {t('Visual Mode')}
+                    </>
+                  )}
+                </Button>
+              </div>
+              <FormControl>
+                {useVisualEditor ? (
+                  <RateLimitVisualEditor
+                    value={field.value ?? ''}
+                    onChange={field.onChange}
+                  />
+                ) : (
+                  <Textarea
+                    rows={8}
+                    placeholder={`{\n  "default": [200, 100],\n  "vip": [0, 1000]\n}`}
+                    className='font-mono text-sm'
+                    value={field.value ?? ''}
+                    onChange={field.onChange}
+                  />
+                )}
+              </FormControl>
+              {!useVisualEditor && (
+                <FormDescription>
+                  <div className='space-y-1 text-xs'>
+                    <p className='font-semibold'>{t('Format:')}</p>
+                    <ul className='list-inside list-disc space-y-0.5 pl-2'>
+                      <li>
+                        {t('JSON object:')}{' '}
+                        {`{"groupName": [maxRequests, maxSuccess]}`}
+                      </li>
+                      <li>
+                        {t('Example:')}{' '}
+                        {`{"default": [200, 100], "vip": [0, 1000]}`}
+                      </li>
+                      <li>
+                        {t(
+                          'maxRequests ≥ 0, maxSuccess ≥ 1, both ≤ 2,147,483,647'
+                        )}
+                      </li>
+                      <li>
+                        {t(
+                          'Group config overrides global limits, shares the same period'
+                        )}
+                      </li>
+                    </ul>
+                  </div>
+                </FormDescription>
+              )}
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      </div>
+    </div>
+  )
+}
+
 export function RateLimitSection({ defaultValues }: RateLimitSectionProps) {
   const { t } = useTranslation()
   const updateOption = useUpdateOption()
-  const [useVisualEditor, setUseVisualEditor] = useState(true)
 
   const rateLimitSchema = createRateLimitSchema(t)
 
@@ -123,194 +373,44 @@ export function RateLimitSection({ defaultValues }: RateLimitSectionProps) {
             isSaving={updateOption.isPending}
             saveLabel='Save rate limits'
           />
-          <FormField
+          <RateLimitWindowCard
             control={form.control}
-            name='ModelRequestRateLimitEnabled'
-            render={({ field }) => (
-              <SettingsSwitchItem>
-                <SettingsSwitchContent>
-                  <FormLabel>{t('Enable rate limiting')}</FormLabel>
-                  <FormDescription>
-                    {t(
-                      'This controls model request rate limiting. Web/API route throttling is configured by environment variables and may still return 429.'
-                    )}
-                  </FormDescription>
-                </SettingsSwitchContent>
-                <FormControl>
-                  <Switch
-                    checked={field.value}
-                    onCheckedChange={field.onChange}
-                  />
-                </FormControl>
-              </SettingsSwitchItem>
-            )}
+            fields={{
+              enabled: 'ModelRequestRateLimitEnabled',
+              duration: 'ModelRequestRateLimitDurationMinutes',
+              count: 'ModelRequestRateLimitCount',
+              success: 'ModelRequestRateLimitSuccessCount',
+              group: 'ModelRequestRateLimitGroup',
+            }}
+            enableLabel='Enable rate limiting'
+            enableDescription='This controls model request rate limiting. Web/API route throttling is configured by environment variables and may still return 429.'
+            showDuration
           />
-
-          <div className='grid gap-4 md:grid-cols-3'>
-            <FormField
-              control={form.control}
-              name='ModelRequestRateLimitDurationMinutes'
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t('Limit period')}</FormLabel>
-                  <FormControl>
-                    <div className='flex items-center gap-2'>
-                      <Input
-                        type='number'
-                        min={0}
-                        step={1}
-                        {...field}
-                        onChange={(e) =>
-                          field.onChange(parseInt(e.target.value) || 0)
-                        }
-                      />
-                      <span className='text-muted-foreground text-sm'>
-                        {t('minutes')}
-                      </span>
-                    </div>
-                  </FormControl>
-                  <FormDescription>
-                    {t('Time window for rate limiting')}
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name='ModelRequestRateLimitCount'
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t('Max requests per period')}</FormLabel>
-                  <FormControl>
-                    <div className='flex items-center gap-2'>
-                      <Input
-                        type='number'
-                        min={0}
-                        max={100000000}
-                        step={1}
-                        {...field}
-                        onChange={(e) =>
-                          field.onChange(parseInt(e.target.value) || 0)
-                        }
-                      />
-                      <span className='text-muted-foreground text-sm'>
-                        {t('times')}
-                      </span>
-                    </div>
-                  </FormControl>
-                  <FormDescription>
-                    {t('Including failed requests, 0 = unlimited')}
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name='ModelRequestRateLimitSuccessCount'
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t('Max successful requests')}</FormLabel>
-                  <FormControl>
-                    <div className='flex items-center gap-2'>
-                      <Input
-                        type='number'
-                        min={1}
-                        max={100000000}
-                        step={1}
-                        {...field}
-                        onChange={(e) =>
-                          field.onChange(parseInt(e.target.value) || 1)
-                        }
-                      />
-                      <span className='text-muted-foreground text-sm'>
-                        {t('times')}
-                      </span>
-                    </div>
-                  </FormControl>
-                  <FormDescription>
-                    {t('Only successful requests')}
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </div>
-
-          <FormField
+          <RateLimitWindowCard
             control={form.control}
-            name='ModelRequestRateLimitGroup'
-            render={({ field }) => (
-              <FormItem>
-                <div className='flex items-center justify-between'>
-                  <FormLabel>{t('Group-based rate limits')}</FormLabel>
-                  <Button
-                    type='button'
-                    variant='outline'
-                    size='sm'
-                    onClick={() => setUseVisualEditor(!useVisualEditor)}
-                  >
-                    {useVisualEditor ? (
-                      <>
-                        <Code2 className='mr-2 h-4 w-4' />
-                        {t('JSON Mode')}
-                      </>
-                    ) : (
-                      <>
-                        <Palette className='mr-2 h-4 w-4' />
-                        {t('Visual Mode')}
-                      </>
-                    )}
-                  </Button>
-                </div>
-                <FormControl>
-                  {useVisualEditor ? (
-                    <RateLimitVisualEditor
-                      value={field.value || ''}
-                      onChange={field.onChange}
-                    />
-                  ) : (
-                    <Textarea
-                      rows={8}
-                      placeholder={`{\n  "default": [200, 100],\n  "vip": [0, 1000]\n}`}
-                      className='font-mono text-sm'
-                      {...field}
-                    />
-                  )}
-                </FormControl>
-                {!useVisualEditor && (
-                  <FormDescription>
-                    <div className='space-y-1 text-xs'>
-                      <p className='font-semibold'>{t('Format:')}</p>
-                      <ul className='list-inside list-disc space-y-0.5 pl-2'>
-                        <li>
-                          {t('JSON object:')}{' '}
-                          {`{"groupName": [maxRequests, maxSuccess]}`}
-                        </li>
-                        <li>
-                          {t('Example:')}{' '}
-                          {`{"default": [200, 100], "vip": [0, 1000]}`}
-                        </li>
-                        <li>
-                          {t(
-                            'maxRequests ≥ 0, maxSuccess ≥ 1, both ≤ 2,147,483,647'
-                          )}
-                        </li>
-                        <li>
-                          {t(
-                            'Group config overrides global limits, shares the same period'
-                          )}
-                        </li>
-                      </ul>
-                    </div>
-                  </FormDescription>
-                )}
-                <FormMessage />
-              </FormItem>
-            )}
+            fields={{
+              enabled: 'AccountFiveHourRateLimitEnabled',
+              count: 'AccountFiveHourRateLimitCount',
+              success: 'AccountFiveHourRateLimitSuccessCount',
+              group: 'AccountFiveHourRateLimitGroup',
+            }}
+            enableLabel={t('Enable 5-hour account rate limiting')}
+            enableDescription={t('Limits total and successful requests per account over a rolling 5-hour window. Applies after model-level checks.')}
+            showDuration={false}
+            successAllowZero
+          />
+          <RateLimitWindowCard
+            control={form.control}
+            fields={{
+              enabled: 'AccountWeeklyRateLimitEnabled',
+              count: 'AccountWeeklyRateLimitCount',
+              success: 'AccountWeeklyRateLimitSuccessCount',
+              group: 'AccountWeeklyRateLimitGroup',
+            }}
+            enableLabel={t('Enable weekly account rate limiting')}
+            enableDescription={t('Limits total and successful requests per account over a rolling 7-day (weekly) window. Applies after model-level checks.')}
+            showDuration={false}
+            successAllowZero
           />
         </SettingsForm>
       </Form>
