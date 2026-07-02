@@ -177,30 +177,26 @@ func recordRedisSuccess(ctx context.Context, rdb *redis.Client, w rateLimitWindo
 	recordRedisRequest(ctx, rdb, w.redisSuccessKey, w.successMaxCount, w.durationSeconds)
 }
 
-// checkMemoryWindow checks the success and total limits for a window in memory.
-func checkMemoryWindow(w rateLimitWindow) (bool, string) {
+// checkAndRecordMemoryTotal atomically checks and records a total request for
+// a window. Returns (allowed, blockedMsg). Using Request instead of a separate
+// Check+Record avoids a TOCTOU race under concurrent load.
+func checkAndRecordMemoryTotal(w rateLimitWindow) (bool, string) {
 	w.memLimiter.Init(time.Duration(w.durationMinutes) * time.Minute)
 
-	// 1. 检查总请求数限制（totalMaxCount为0时跳过）
-	if w.totalMaxCount > 0 && !w.memLimiter.Check(w.memTotalKey, w.totalMaxCount, w.durationSeconds) {
+	if w.totalMaxCount > 0 && !w.memLimiter.Request(w.memTotalKey, w.totalMaxCount, w.durationSeconds) {
 		return false, w.totalBlockedMsg
 	}
-
-	// 2. 检查成功请求数限制（successMaxCount为0时跳过，表示不限制）
-	if w.successMaxCount > 0 {
-		if !w.memLimiter.Check(w.memSuccessKey, w.successMaxCount, w.durationSeconds) {
-			return false, w.successBlockedMsg
-		}
-	}
-
 	return true, ""
 }
 
-// recordMemoryTotal records an allowed request before it reaches the upstream handler.
-func recordMemoryTotal(w rateLimitWindow) {
-	if w.totalMaxCount > 0 {
-		w.memLimiter.Request(w.memTotalKey, w.totalMaxCount, w.durationSeconds)
+// checkMemorySuccess checks the success limit for a window without recording.
+func checkMemorySuccess(w rateLimitWindow) (bool, string) {
+	w.memLimiter.Init(time.Duration(w.durationMinutes) * time.Minute)
+
+	if w.successMaxCount > 0 && !w.memLimiter.Check(w.memSuccessKey, w.successMaxCount, w.durationSeconds) {
+		return false, w.successBlockedMsg
 	}
+	return true, ""
 }
 
 // recordMemorySuccess records a successful request for a window in memory.
@@ -343,16 +339,21 @@ func ModelRequestRateLimit() func(c *gin.Context) {
 				}
 			}
 		} else {
-			// 检查所有启用窗口
+			// 检查成功请求限制（只读检查，成功后才记录）
 			for _, w := range windows {
-				allowed, msg := checkMemoryWindow(w)
+				allowed, msg := checkMemorySuccess(w)
 				if !allowed {
 					abortWithOpenAiMessage(c, http.StatusTooManyRequests, msg)
 					return
 				}
 			}
+			// 原子检查+记录总请求数
 			for _, w := range windows {
-				recordMemoryTotal(w)
+				allowed, msg := checkAndRecordMemoryTotal(w)
+				if !allowed {
+					abortWithOpenAiMessage(c, http.StatusTooManyRequests, msg)
+					return
+				}
 			}
 
 			// 处理请求

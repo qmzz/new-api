@@ -158,7 +158,7 @@ export function InviteCodesMutateDrawer({
             {isUpdate
               ? t('Update the invite code by providing necessary info.')
               : t('Add new invite code(s) by providing necessary info.')}{' '}
-            {t('Click save when you&apos;re done.')}
+            {t("Click save when you're done.")}
           </SheetDescription>
         </SheetHeader>
         <Form {...form}>

@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"encoding/csv"
 	"net/http"
 	"strconv"
 	"time"
@@ -123,8 +124,15 @@ func AddInviteCode(c *gin.Context) {
 }
 
 func DeleteInviteCode(c *gin.Context) {
-	id, _ := strconv.Atoi(c.Param("id"))
-	err := model.DeleteInviteCodeById(id)
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": "无效的ID",
+		})
+		return
+	}
+	err = model.DeleteInviteCodeById(id)
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -149,10 +157,26 @@ func UpdateInviteCode(c *gin.Context) {
 		return
 	}
 	if statusOnly == "" {
+		if len(code.Name) == 0 || len(code.Name) > 20 {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": "邀请码名称长度必须在1-20之间",
+			})
+			return
+		}
 		cleanCode.Name = code.Name
 		cleanCode.ExpiredTime = code.ExpiredTime
 	}
 	if statusOnly != "" {
+		if code.Status != common.InviteCodeStatusEnabled &&
+			code.Status != common.InviteCodeStatusDisabled &&
+			code.Status != common.InviteCodeStatusUsed {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": "无效的状态值",
+			})
+			return
+		}
 		cleanCode.Status = code.Status
 	}
 	err = cleanCode.Update()
@@ -193,7 +217,8 @@ func ExportInviteCodesCSV(c *gin.Context) {
 	c.Header("Content-Disposition", "attachment; filename=invite_codes.csv")
 	c.Writer.Write([]byte{0xEF, 0xBB, 0xBF}) // BOM for Excel
 
-	c.Writer.WriteString("ID,Name,Key,Status,Created,Expires,Used By\n")
+	w := csv.NewWriter(c.Writer)
+	w.Write([]string{"ID", "Name", "Key", "Status", "Created", "Expires", "Used By"})
 	for _, code := range codes {
 		statusStr := "Enabled"
 		if code.Status == common.InviteCodeStatusDisabled {
@@ -210,14 +235,15 @@ func ExportInviteCodesCSV(c *gin.Context) {
 		if code.UsedUserId > 0 {
 			usedByStr = strconv.Itoa(code.UsedUserId)
 		}
-		c.Writer.WriteString(
-			strconv.Itoa(code.Id) + "," +
-				code.Name + "," +
-				code.Key + "," +
-				statusStr + "," +
-				createdStr + "," +
-				expiredStr + "," +
-				usedByStr + "\n",
-		)
+		w.Write([]string{
+			strconv.Itoa(code.Id),
+			code.Name,
+			code.Key,
+			statusStr,
+			createdStr,
+			expiredStr,
+			usedByStr,
+		})
 	}
+	w.Flush()
 }

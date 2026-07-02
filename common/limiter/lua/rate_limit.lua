@@ -40,7 +40,9 @@ end
 ---- 更新桶状态并设置过期时间
 redis.call('HMSET', key, 'tokens', tokens, 'last_time', last_time)
 if rate > 0 then
-    redis.call('EXPIRE', key, math.ceil(capacity / rate) + 60) -- 适当延长过期时间
+    redis.call('EXPIRE', key, math.ceil(capacity / rate) + 60)
+else
+    redis.call('EXPIRE', key, 3600)
 end
 
 return allowed and 1 or 0

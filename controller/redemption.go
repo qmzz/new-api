@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"encoding/csv"
 	"net/http"
 	"strconv"
 	"time"
@@ -212,7 +213,8 @@ func ExportRedemptionsCSV(c *gin.Context) {
 	c.Header("Content-Disposition", "attachment; filename=redemption_codes.csv")
 	c.Writer.Write([]byte{0xEF, 0xBB, 0xBF})
 
-	c.Writer.WriteString("ID,Name,Key,Status,Quota,Created,Expires,Used By\n")
+	w := csv.NewWriter(c.Writer)
+	w.Write([]string{"ID", "Name", "Key", "Status", "Quota", "Created", "Expires", "Used By"})
 	for _, r := range redemptions {
 		statusStr := "Enabled"
 		if r.Status == common.RedemptionCodeStatusDisabled {
@@ -229,15 +231,16 @@ func ExportRedemptionsCSV(c *gin.Context) {
 		if r.UsedUserId > 0 {
 			usedByStr = strconv.Itoa(r.UsedUserId)
 		}
-		c.Writer.WriteString(
-			strconv.Itoa(r.Id) + "," +
-				r.Name + "," +
-				r.Key + "," +
-				statusStr + "," +
-				strconv.Itoa(r.Quota) + "," +
-				createdStr + "," +
-				expiredStr + "," +
-				usedByStr + "\n",
-		)
+		w.Write([]string{
+			strconv.Itoa(r.Id),
+			r.Name,
+			r.Key,
+			statusStr,
+			strconv.Itoa(r.Quota),
+			createdStr,
+			expiredStr,
+			usedByStr,
+		})
 	}
+	w.Flush()
 }

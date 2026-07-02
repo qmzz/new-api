@@ -247,24 +247,36 @@ func Register(c *gin.Context) {
 	if common.EmailVerificationEnabled {
 		cleanUser.Email = user.Email
 	}
-	if err := cleanUser.Insert(inviterId); err != nil {
-		common.ApiError(c, err)
-		return
+	if common.InviteCodeRequired && inviteCode != "" {
+		// 邀请码注册：事务内完成用户创建+邀请码消费，防止竞态
+		err := model.DB.Transaction(func(tx *gorm.DB) error {
+			if err := cleanUser.InsertWithTx(tx, inviterId); err != nil {
+				return err
+			}
+			return model.UseInviteCode(tx, inviteCode, cleanUser.Id)
+		})
+		if err != nil {
+			common.ApiError(c, err)
+			return
+		}
+		// 事务提交后执行非关键的后续任务（边栏配置、日志、邀请奖励）
+		cleanUser.FinishInsert(inviterId)
+	} else {
+		if err := cleanUser.Insert(inviterId); err != nil {
+			common.ApiError(c, err)
+			return
+		}
 	}
 
 	// 获取插入后的用户ID
-	var insertedUser model.User
-	if err := model.DB.Where("username = ?", cleanUser.Username).First(&insertedUser).Error; err != nil {
-		common.ApiErrorI18n(c, i18n.MsgUserRegisterFailed)
-		return
-	}
-
-	// 消费邀请码
-	if common.InviteCodeRequired && inviteCode != "" {
-		if err := model.UseInviteCode(model.DB, inviteCode, insertedUser.Id); err != nil {
-			common.SysLog("failed to use invite code: " + err.Error())
-			// 不阻塞注册流程，邀请码消费失败仅记录日志
+	insertedUser := cleanUser
+	if insertedUser.Id == 0 {
+		var u model.User
+		if err := model.DB.Where("username = ?", cleanUser.Username).First(&u).Error; err != nil {
+			common.ApiErrorI18n(c, i18n.MsgUserRegisterFailed)
+			return
 		}
+		insertedUser = u
 	}
 	// 生成默认令牌
 	if constant.GenerateDefaultToken {

@@ -24,67 +24,30 @@ type InviteCode struct {
 }
 
 func GetAllInviteCodes(startIdx int, num int) (codes []*InviteCode, total int64, err error) {
-	tx := DB.Begin()
-	if tx.Error != nil {
-		return nil, 0, tx.Error
-	}
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-		}
-	}()
-
-	err = tx.Model(&InviteCode{}).Count(&total).Error
+	err = DB.Model(&InviteCode{}).Count(&total).Error
 	if err != nil {
-		tx.Rollback()
 		return nil, 0, err
 	}
-
-	err = tx.Order("id desc").Limit(num).Offset(startIdx).Find(&codes).Error
+	err = DB.Order("id desc").Limit(num).Offset(startIdx).Find(&codes).Error
 	if err != nil {
-		tx.Rollback()
 		return nil, 0, err
 	}
-
-	if err = tx.Commit().Error; err != nil {
-		return nil, 0, err
-	}
-
 	return codes, total, nil
 }
 
 func SearchInviteCodes(keyword string, startIdx int, num int) (codes []*InviteCode, total int64, err error) {
-	tx := DB.Begin()
-	if tx.Error != nil {
-		return nil, 0, tx.Error
-	}
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-		}
-	}()
-
-	query := tx.Model(&InviteCode{})
+	query := DB.Model(&InviteCode{})
 	if keyword != "" {
 		query = query.Where("name LIKE ?", "%"+keyword+"%")
 	}
-
 	err = query.Count(&total).Error
 	if err != nil {
-		tx.Rollback()
 		return nil, 0, err
 	}
-
 	err = query.Order("id desc").Limit(num).Offset(startIdx).Find(&codes).Error
 	if err != nil {
-		tx.Rollback()
 		return nil, 0, err
 	}
-
-	if err = tx.Commit().Error; err != nil {
-		return nil, 0, err
-	}
-
 	return codes, total, nil
 }
 
