@@ -154,6 +154,12 @@ export function SignUpForm({
       }
     }
 
+    // Validate invite code if required
+    if (status?.invite_code_required && !inviteCode.trim()) {
+      toast.error(t('An invite code is required to register'))
+      return
+    }
+
     if (!validateTurnstile()) return
 
     setIsLoading(true)
