@@ -32,6 +32,7 @@ import { RateLimitDialog, type RateLimitEntryData } from './rate-limit-dialog'
 type RateLimitVisualEditorProps = {
   value: string
   onChange: (value: string) => void
+  successAllowZero?: boolean
 }
 
 type RateLimitEntry = RateLimitEntryData
@@ -39,6 +40,7 @@ type RateLimitEntry = RateLimitEntryData
 export function RateLimitVisualEditor({
   value,
   onChange,
+  successAllowZero = false,
 }: RateLimitVisualEditorProps) {
   const { t } = useTranslation()
   const [searchText, setSearchText] = useState('')
@@ -202,6 +204,7 @@ export function RateLimitVisualEditor({
         onOpenChange={setDialogOpen}
         onSave={handleSave}
         editData={editData}
+        successAllowZero={successAllowZero}
       />
     </div>
   )

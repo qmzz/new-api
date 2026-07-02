@@ -47,24 +47,34 @@ import { SettingsSection } from '../components/settings-section'
 import { useUpdateOption } from '../hooks/use-update-option'
 import { RateLimitVisualEditor } from './rate-limit-visual-editor'
 
-const isValidJSON = (value: string | undefined) => {
-  if (!value || value.trim() === '') return true
-  try {
-    const parsed = JSON.parse(value)
-    if (typeof parsed !== 'object' || Array.isArray(parsed)) {
+const createGroupJSONValidator =
+  (successAllowZero: boolean) => (value: string | undefined) => {
+    if (!value || value.trim() === '') return true
+    try {
+      const parsed = JSON.parse(value)
+      if (typeof parsed !== 'object' || Array.isArray(parsed)) {
+        return false
+      }
+      const minSuccess = successAllowZero ? 0 : 1
+      for (const [, val] of Object.entries(parsed)) {
+        if (!Array.isArray(val) || val.length !== 2) {
+          return false
+        }
+        if (typeof val[0] !== 'number' || typeof val[1] !== 'number') {
+          return false
+        }
+        if (val[0] < 0 || val[1] < minSuccess) {
+          return false
+        }
+        if (val[0] > 2147483647 || val[1] > 2147483647) {
+          return false
+        }
+      }
+      return true
+    } catch {
       return false
     }
-    for (const [, val] of Object.entries(parsed)) {
-      if (!Array.isArray(val) || val.length !== 2) return false
-      if (typeof val[0] !== 'number' || typeof val[1] !== 'number') return false
-      if (val[0] < 0 || val[1] < 1) return false
-      if (val[0] > 2147483647 || val[1] > 2147483647) return false
-    }
-    return true
-  } catch {
-    return false
   }
-}
 
 const createRateLimitSchema = (t: (key: string) => string) =>
   z.object({
@@ -75,7 +85,7 @@ const createRateLimitSchema = (t: (key: string) => string) =>
     ModelRequestRateLimitGroup: z
       .string()
       .optional()
-      .refine(isValidJSON, {
+      .refine(createGroupJSONValidator(false), {
         message: t('Invalid JSON format or values out of allowed range'),
       }),
     AccountFiveHourRateLimitEnabled: z.boolean(),
@@ -84,7 +94,7 @@ const createRateLimitSchema = (t: (key: string) => string) =>
     AccountFiveHourRateLimitGroup: z
       .string()
       .optional()
-      .refine(isValidJSON, {
+      .refine(createGroupJSONValidator(true), {
         message: t('Invalid JSON format or values out of allowed range'),
       }),
     AccountWeeklyRateLimitEnabled: z.boolean(),
@@ -93,7 +103,7 @@ const createRateLimitSchema = (t: (key: string) => string) =>
     AccountWeeklyRateLimitGroup: z
       .string()
       .optional()
-      .refine(isValidJSON, {
+      .refine(createGroupJSONValidator(true), {
         message: t('Invalid JSON format or values out of allowed range'),
       }),
   })
@@ -179,7 +189,7 @@ function RateLimitWindowCard({
                         step={1}
                         value={field.value as number}
                         onChange={(e) =>
-                          field.onChange(parseInt(e.target.value) || 0)
+                          field.onChange(Number.parseInt(e.target.value) || 0)
                         }
                       />
                       <span className='text-muted-foreground text-sm'>
@@ -211,7 +221,7 @@ function RateLimitWindowCard({
                       step={1}
                       value={field.value as number}
                       onChange={(e) =>
-                        field.onChange(parseInt(e.target.value) || 0)
+                        field.onChange(Number.parseInt(e.target.value) || 0)
                       }
                     />
                     <span className='text-muted-foreground text-sm'>
@@ -242,7 +252,9 @@ function RateLimitWindowCard({
                       step={1}
                       value={field.value as number}
                       onChange={(e) =>
-                        field.onChange(parseInt(e.target.value) || successFallback)
+                        field.onChange(
+                          Number.parseInt(e.target.value) || successFallback
+                        )
                       }
                     />
                     <span className='text-muted-foreground text-sm'>
@@ -290,6 +302,7 @@ function RateLimitWindowCard({
                   <RateLimitVisualEditor
                     value={field.value ?? ''}
                     onChange={field.onChange}
+                    successAllowZero={successAllowZero}
                   />
                 ) : (
                   <Textarea
@@ -316,7 +329,9 @@ function RateLimitWindowCard({
                       </li>
                       <li>
                         {t(
-                          'maxRequests ≥ 0, maxSuccess ≥ 1, both ≤ 2,147,483,647'
+                          successAllowZero
+                            ? 'maxRequests ≥ 0, maxSuccess ≥ 0, both ≤ 2,147,483,647'
+                            : 'maxRequests ≥ 0, maxSuccess ≥ 1, both ≤ 2,147,483,647'
                         )}
                       </li>
                       <li>
@@ -395,7 +410,9 @@ export function RateLimitSection({ defaultValues }: RateLimitSectionProps) {
               group: 'AccountFiveHourRateLimitGroup',
             }}
             enableLabel={t('Enable 5-hour account rate limiting')}
-            enableDescription={t('Limits total and successful requests per account over a rolling 5-hour window. Applies after model-level checks.')}
+            enableDescription={t(
+              'Limits total and successful requests per account over a rolling 5-hour window. Applies after model-level checks.'
+            )}
             showDuration={false}
             successAllowZero
           />
@@ -408,7 +425,9 @@ export function RateLimitSection({ defaultValues }: RateLimitSectionProps) {
               group: 'AccountWeeklyRateLimitGroup',
             }}
             enableLabel={t('Enable weekly account rate limiting')}
-            enableDescription={t('Limits total and successful requests per account over a rolling 7-day (weekly) window. Applies after model-level checks.')}
+            enableDescription={t(
+              'Limits total and successful requests per account over a rolling 7-day (weekly) window. Applies after model-level checks.'
+            )}
             showDuration={false}
             successAllowZero
           />

@@ -4987,6 +4987,20 @@
     "Enable 5-hour account rate limiting": "Enable 5-hour account rate limiting",
     "Limits total and successful requests per account over a rolling 5-hour window. Applies after model-level checks.": "Limits total and successful requests per account over a rolling 5-hour window. Applies after model-level checks.",
     "Enable weekly account rate limiting": "Enable weekly account rate limiting",
-    "Limits total and successful requests per account over a rolling 7-day (weekly) window. Applies after model-level checks.": "Limits total and successful requests per account over a rolling 7-day (weekly) window. Applies after model-level checks."
+    "Limits total and successful requests per account over a rolling 7-day (weekly) window. Applies after model-level checks.": "Limits total and successful requests per account over a rolling 7-day (weekly) window. Applies after model-level checks.",
+    "maxRequests ≥ 0, maxSuccess ≥ 0, both ≤ 2,147,483,647": "maxRequests ≥ 0, maxSuccess ≥ 0, both ≤ 2,147,483,647",
+    "Only successful requests count toward this limit. 0 = unlimited.": "Only successful requests count toward this limit. 0 = unlimited.",
+    "Model Availability": "Model Availability",
+    "Review which usable groups are enabled for every model in one place.": "Review which usable groups are enabled for every model in one place.",
+    "Total Models": "Total Models",
+    "Available Models": "Available Models",
+    "Unavailable Models": "Unavailable Models",
+    "Usable Groups": "Usable Groups",
+    "Availability": "Availability",
+    "All Statuses": "All Statuses",
+    "All Groups": "All Groups",
+    "All Vendors": "All Vendors",
+    "Search model name, provider, or group...": "Search model name, provider, or group...",
+    "No usable group is enabled for this model.": "No usable group is enabled for this model."
   }
 }

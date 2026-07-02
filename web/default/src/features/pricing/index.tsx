@@ -16,11 +16,13 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { Activity } from 'lucide-react'
 import { useCallback, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { PublicLayout } from '@/components/layout'
 import { PageTransition } from '@/components/page-transition'
+import { Button } from '@/components/ui/button'
 
 import {
   LoadingSkeleton,
@@ -189,6 +191,15 @@ export function Pricing() {
                 'Discover curated AI models, compare pricing and capabilities, and choose the right model for every scenario.'
               )}
             </p>
+            <Button
+              variant='outline'
+              size='sm'
+              className='mt-4 gap-1.5'
+              render={<a href='/pricing/availability' />}
+            >
+              <Activity className='size-4' />
+              {t('Model Availability')}
+            </Button>
             <SearchBar
               value={searchInput}
               onChange={setSearchInput}

@@ -68,3 +68,22 @@ func (l *InMemoryRateLimiter) Request(key string, maxRequestNum int, duration in
 	}
 	return true
 }
+
+// Check reports whether a request would fit in the current sliding window
+// without mutating the limiter state.
+func (l *InMemoryRateLimiter) Check(key string, maxRequestNum int, duration int64) bool {
+	l.mutex.Lock()
+	defer l.mutex.Unlock()
+
+	if maxRequestNum <= 0 {
+		return true
+	}
+
+	queue, ok := l.store[key]
+	if !ok || len(*queue) < maxRequestNum {
+		return true
+	}
+
+	now := time.Now().Unix()
+	return now-(*queue)[0] >= duration
+}

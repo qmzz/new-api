@@ -66,16 +66,20 @@ func getGroupRateLimit(group string, m map[string][2]int, mu *sync.RWMutex) (tot
 	return limits[0], limits[1], true
 }
 
-// checkRateLimitGroup validates a JSON rate-limit group map: total >= 0,
-// success >= 1, both within int32 range.
-func checkRateLimitGroup(jsonStr string) error {
+// checkRateLimitGroup validates a JSON rate-limit group map. total must be >= 0;
+// success can be 0 only for windows that explicitly treat 0 as unlimited.
+func checkRateLimitGroup(jsonStr string, allowSuccessZero bool) error {
 	check := make(map[string][2]int)
 	if err := common.Unmarshal([]byte(jsonStr), &check); err != nil {
 		return err
 	}
+	minSuccess := 1
+	if allowSuccessZero {
+		minSuccess = 0
+	}
 	for group, limits := range check {
-		if limits[0] < 0 || limits[1] < 1 {
-			return fmt.Errorf("group %s has negative rate limit values: [%d, %d]", group, limits[0], limits[1])
+		if limits[0] < 0 || limits[1] < minSuccess {
+			return fmt.Errorf("group %s has invalid rate limit values: [%d, %d]", group, limits[0], limits[1])
 		}
 		if limits[0] > math.MaxInt32 || limits[1] > math.MaxInt32 {
 			return fmt.Errorf("group %s [%d, %d] has max rate limits value 2147483647", group, limits[0], limits[1])
@@ -100,7 +104,7 @@ func GetGroupRateLimit(group string) (totalCount, successCount int, found bool) 
 }
 
 func CheckModelRequestRateLimitGroup(jsonStr string) error {
-	return checkRateLimitGroup(jsonStr)
+	return checkRateLimitGroup(jsonStr, false)
 }
 
 // --- 5-hour window ---
@@ -118,7 +122,7 @@ func GetAccountFiveHourRateLimitGroup(group string) (totalCount, successCount in
 }
 
 func CheckAccountFiveHourRateLimitGroup(jsonStr string) error {
-	return checkRateLimitGroup(jsonStr)
+	return checkRateLimitGroup(jsonStr, true)
 }
 
 // --- Weekly window ---
@@ -136,5 +140,5 @@ func GetAccountWeeklyRateLimitGroup(group string) (totalCount, successCount int,
 }
 
 func CheckAccountWeeklyRateLimitGroup(jsonStr string) error {
-	return checkRateLimitGroup(jsonStr)
+	return checkRateLimitGroup(jsonStr, true)
 }

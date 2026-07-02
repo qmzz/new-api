@@ -4987,6 +4987,20 @@
     "Enable 5-hour account rate limiting": "启用5小时账号限额",
     "Limits total and successful requests per account over a rolling 5-hour window. Applies after model-level checks.": "按账号限制5小时滚动窗口内的总请求数和成功请求数。在模型级检查之后生效。",
     "Enable weekly account rate limiting": "启用周账号限额",
-    "Limits total and successful requests per account over a rolling 7-day (weekly) window. Applies after model-level checks.": "按账号限制7天滚动窗口内的总请求数和成功请求数。在模型级检查之后生效。"
+    "Limits total and successful requests per account over a rolling 7-day (weekly) window. Applies after model-level checks.": "按账号限制7天滚动窗口内的总请求数和成功请求数。在模型级检查之后生效。",
+    "maxRequests ≥ 0, maxSuccess ≥ 0, both ≤ 2,147,483,647": "maxRequests ≥ 0, maxSuccess ≥ 0，均不超过 2,147,483,647",
+    "Only successful requests count toward this limit. 0 = unlimited.": "仅成功请求计入此限额。0 表示不限。",
+    "Model Availability": "模型可用性",
+    "Review which usable groups are enabled for every model in one place.": "在一个页面汇总查看每个模型启用的可用分组。",
+    "Total Models": "模型总数",
+    "Available Models": "可用模型",
+    "Unavailable Models": "不可用模型",
+    "Usable Groups": "可用分组",
+    "Availability": "可用性",
+    "All Statuses": "全部状态",
+    "All Groups": "全部分组",
+    "All Vendors": "全部供应商",
+    "Search model name, provider, or group...": "搜索模型名称、供应商或分组...",
+    "No usable group is enabled for this model.": "此模型未启用任何可用分组。"
   }
 }

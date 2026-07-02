@@ -18,6 +18,7 @@ import { Route as SetupIndexRouteImport } from './routes/setup/index'
 import { Route as RankingsIndexRouteImport } from './routes/rankings/index'
 import { Route as PricingIndexRouteImport } from './routes/pricing/index'
 import { Route as AboutIndexRouteImport } from './routes/about/index'
+import { Route as PricingAvailabilityRouteImport } from './routes/pricing/availability'
 import { Route as OauthProviderRouteImport } from './routes/oauth/$provider'
 import { Route as ConsoleTopupRouteImport } from './routes/console/topup'
 import { Route as ConsoleLogRouteImport } from './routes/console/log'
@@ -111,6 +112,11 @@ const PricingIndexRoute = PricingIndexRouteImport.update({
 const AboutIndexRoute = AboutIndexRouteImport.update({
   id: '/about/',
   path: '/about/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PricingAvailabilityRoute = PricingAvailabilityRouteImport.update({
+  id: '/pricing/availability',
+  path: '/pricing/availability',
   getParentRoute: () => rootRouteImport,
 } as any)
 const OauthProviderRoute = OauthProviderRouteImport.update({
@@ -420,6 +426,7 @@ export interface FileRoutesByFullPath {
   '/console/log': typeof ConsoleLogRoute
   '/console/topup': typeof ConsoleTopupRoute
   '/oauth/$provider': typeof OauthProviderRoute
+  '/pricing/availability': typeof PricingAvailabilityRoute
   '/about/': typeof AboutIndexRoute
   '/pricing/': typeof PricingIndexRoute
   '/rankings/': typeof RankingsIndexRoute
@@ -479,6 +486,7 @@ export interface FileRoutesByTo {
   '/console/log': typeof ConsoleLogRoute
   '/console/topup': typeof ConsoleTopupRoute
   '/oauth/$provider': typeof OauthProviderRoute
+  '/pricing/availability': typeof PricingAvailabilityRoute
   '/about': typeof AboutIndexRoute
   '/pricing': typeof PricingIndexRoute
   '/rankings': typeof RankingsIndexRoute
@@ -542,6 +550,7 @@ export interface FileRoutesById {
   '/console/log': typeof ConsoleLogRoute
   '/console/topup': typeof ConsoleTopupRoute
   '/oauth/$provider': typeof OauthProviderRoute
+  '/pricing/availability': typeof PricingAvailabilityRoute
   '/about/': typeof AboutIndexRoute
   '/pricing/': typeof PricingIndexRoute
   '/rankings/': typeof RankingsIndexRoute
@@ -604,6 +613,7 @@ export interface FileRouteTypes {
     | '/console/log'
     | '/console/topup'
     | '/oauth/$provider'
+    | '/pricing/availability'
     | '/about/'
     | '/pricing/'
     | '/rankings/'
@@ -663,6 +673,7 @@ export interface FileRouteTypes {
     | '/console/log'
     | '/console/topup'
     | '/oauth/$provider'
+    | '/pricing/availability'
     | '/about'
     | '/pricing'
     | '/rankings'
@@ -725,6 +736,7 @@ export interface FileRouteTypes {
     | '/console/log'
     | '/console/topup'
     | '/oauth/$provider'
+    | '/pricing/availability'
     | '/about/'
     | '/pricing/'
     | '/rankings/'
@@ -779,6 +791,7 @@ export interface RootRouteChildren {
   ConsoleLogRoute: typeof ConsoleLogRoute
   ConsoleTopupRoute: typeof ConsoleTopupRoute
   OauthProviderRoute: typeof OauthProviderRoute
+  PricingAvailabilityRoute: typeof PricingAvailabilityRoute
   AboutIndexRoute: typeof AboutIndexRoute
   PricingIndexRoute: typeof PricingIndexRoute
   RankingsIndexRoute: typeof RankingsIndexRoute
@@ -849,6 +862,13 @@ declare module '@tanstack/react-router' {
       path: '/about'
       fullPath: '/about/'
       preLoaderRoute: typeof AboutIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pricing/availability': {
+      id: '/pricing/availability'
+      path: '/pricing/availability'
+      fullPath: '/pricing/availability'
+      preLoaderRoute: typeof PricingAvailabilityRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/oauth/$provider': {
@@ -1357,6 +1377,7 @@ const rootRouteChildren: RootRouteChildren = {
   ConsoleLogRoute: ConsoleLogRoute,
   ConsoleTopupRoute: ConsoleTopupRoute,
   OauthProviderRoute: OauthProviderRoute,
+  PricingAvailabilityRoute: PricingAvailabilityRoute,
   AboutIndexRoute: AboutIndexRoute,
   PricingIndexRoute: PricingIndexRoute,
   RankingsIndexRoute: RankingsIndexRoute,

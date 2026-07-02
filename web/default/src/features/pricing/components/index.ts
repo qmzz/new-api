@@ -28,4 +28,5 @@ export {
   ModelDetailsContent,
   ModelDetailsDrawer,
 } from './model-details'
+export { ModelAvailabilitySummary } from './model-availability-summary'
 export { PricingTable } from './pricing-table'

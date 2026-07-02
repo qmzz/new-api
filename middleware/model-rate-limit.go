@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/common/limiter"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/setting"
 
@@ -28,13 +27,45 @@ const (
 var accountFiveHourRateLimiter common.InMemoryRateLimiter
 var accountWeeklyRateLimiter common.InMemoryRateLimiter
 
+const redisTotalWindowScript = `
+local now = redis.call('TIME')
+local nowMs = tonumber(now[1]) * 1000 + math.floor(tonumber(now[2]) / 1000)
+
+for i = 1, #KEYS do
+    local maxCount = tonumber(ARGV[(i - 1) * 2 + 1])
+    local durationSeconds = tonumber(ARGV[(i - 1) * 2 + 2])
+    if maxCount > 0 and durationSeconds > 0 then
+        local cutoff = nowMs - durationSeconds * 1000
+        redis.call('ZREMRANGEBYSCORE', KEYS[i], '-inf', cutoff)
+        if redis.call('ZCARD', KEYS[i]) >= maxCount then
+            redis.call('EXPIRE', KEYS[i], durationSeconds)
+            return i
+        end
+    end
+end
+
+for i = 1, #KEYS do
+    local maxCount = tonumber(ARGV[(i - 1) * 2 + 1])
+    local durationSeconds = tonumber(ARGV[(i - 1) * 2 + 2])
+    if maxCount > 0 and durationSeconds > 0 then
+        local seqKey = KEYS[i] .. ':seq'
+        local seq = redis.call('INCR', seqKey)
+        redis.call('ZADD', KEYS[i], nowMs, tostring(nowMs) .. '-' .. tostring(seq))
+        redis.call('EXPIRE', KEYS[i], durationSeconds)
+        redis.call('EXPIRE', seqKey, durationSeconds)
+    end
+end
+
+return 0
+`
+
 // rateLimitWindow describes one rate-limit window to check and record.
 type rateLimitWindow struct {
 	durationSeconds   int64
 	durationMinutes   int
 	totalMaxCount     int
 	successMaxCount   int
-	redisTotalKey     string // token-bucket key
+	redisTotalKey     string // sliding-window zset key
 	redisSuccessKey   string // sliding-window list key
 	memTotalKey       string
 	memSuccessKey     string
@@ -96,7 +127,7 @@ func recordRedisRequest(ctx context.Context, rdb *redis.Client, key string, maxC
 	rdb.Expire(ctx, key, time.Duration(durationSeconds)*time.Second)
 }
 
-// checkRedisWindow checks the success and total limits for a window.
+// checkRedisWindow checks the success limit for a window.
 func checkRedisWindow(ctx context.Context, rdb *redis.Client, w rateLimitWindow) (bool, string, error) {
 	// 1. 检查成功请求数限制
 	allowed, err := checkRedisRateLimit(ctx, rdb, w.redisSuccessKey, w.successMaxCount, w.durationSeconds)
@@ -107,22 +138,35 @@ func checkRedisWindow(ctx context.Context, rdb *redis.Client, w rateLimitWindow)
 		return false, w.successBlockedMsg, nil
 	}
 
-	// 2. 检查总请求数限制（令牌桶，totalMaxCount为0时跳过）
-	if w.totalMaxCount > 0 {
-		tb := limiter.New(ctx, rdb)
-		allowed, err = tb.Allow(
-			ctx,
-			w.redisTotalKey,
-			limiter.WithCapacity(int64(w.totalMaxCount)*w.durationSeconds),
-			limiter.WithRate(int64(w.totalMaxCount)),
-			limiter.WithRequested(w.durationSeconds),
-		)
-		if err != nil {
-			return false, "", err
+	return true, "", nil
+}
+
+// checkAndRecordRedisTotalWindows atomically checks all total-request windows
+// and records the request in all of them only when every window allows it.
+func checkAndRecordRedisTotalWindows(ctx context.Context, rdb *redis.Client, windows []rateLimitWindow) (bool, string, error) {
+	keys := make([]string, 0, len(windows))
+	args := make([]interface{}, 0, len(windows)*2)
+	blockedMessages := make([]string, 0, len(windows))
+
+	for _, w := range windows {
+		if w.totalMaxCount <= 0 || w.durationSeconds <= 0 {
+			continue
 		}
-		if !allowed {
-			return false, w.totalBlockedMsg, nil
-		}
+		keys = append(keys, w.redisTotalKey)
+		args = append(args, w.totalMaxCount, w.durationSeconds)
+		blockedMessages = append(blockedMessages, w.totalBlockedMsg)
+	}
+
+	if len(keys) == 0 {
+		return true, "", nil
+	}
+
+	blockedIndex, err := rdb.Eval(ctx, redisTotalWindowScript, keys, args...).Int()
+	if err != nil {
+		return false, "", err
+	}
+	if blockedIndex > 0 && blockedIndex <= len(blockedMessages) {
+		return false, blockedMessages[blockedIndex-1], nil
 	}
 
 	return true, "", nil
@@ -138,19 +182,25 @@ func checkMemoryWindow(w rateLimitWindow) (bool, string) {
 	w.memLimiter.Init(time.Duration(w.durationMinutes) * time.Minute)
 
 	// 1. 检查总请求数限制（totalMaxCount为0时跳过）
-	if w.totalMaxCount > 0 && !w.memLimiter.Request(w.memTotalKey, w.totalMaxCount, w.durationSeconds) {
+	if w.totalMaxCount > 0 && !w.memLimiter.Check(w.memTotalKey, w.totalMaxCount, w.durationSeconds) {
 		return false, w.totalBlockedMsg
 	}
 
 	// 2. 检查成功请求数限制（successMaxCount为0时跳过，表示不限制）
 	if w.successMaxCount > 0 {
-		checkKey := w.memSuccessKey + "_check"
-		if !w.memLimiter.Request(checkKey, w.successMaxCount, w.durationSeconds) {
+		if !w.memLimiter.Check(w.memSuccessKey, w.successMaxCount, w.durationSeconds) {
 			return false, w.successBlockedMsg
 		}
 	}
 
 	return true, ""
+}
+
+// recordMemoryTotal records an allowed request before it reaches the upstream handler.
+func recordMemoryTotal(w rateLimitWindow) {
+	if w.totalMaxCount > 0 {
+		w.memLimiter.Request(w.memTotalKey, w.totalMaxCount, w.durationSeconds)
+	}
 }
 
 // recordMemorySuccess records a successful request for a window in memory.
@@ -177,7 +227,7 @@ func buildRateLimitWindows(userId, group string) []rateLimitWindow {
 			durationMinutes: setting.ModelRequestRateLimitDurationMinutes,
 			totalMaxCount:   totalMaxCount,
 			successMaxCount: successMaxCount,
-			redisTotalKey:   fmt.Sprintf("rateLimit:%s", userId),
+			redisTotalKey:   fmt.Sprintf("rateLimit:%s:%s", ModelRequestRateLimitCountMark, userId),
 			redisSuccessKey: fmt.Sprintf("rateLimit:%s:%s", ModelRequestRateLimitSuccessCountMark, userId),
 			memTotalKey:     ModelRequestRateLimitCountMark + userId,
 			memSuccessKey:   ModelRequestRateLimitSuccessCountMark + userId,
@@ -202,7 +252,7 @@ func buildRateLimitWindows(userId, group string) []rateLimitWindow {
 			durationMinutes: 300,
 			totalMaxCount:   totalMaxCount,
 			successMaxCount: successMaxCount,
-			redisTotalKey:   fmt.Sprintf("rateLimit:%s:%s", AccountFiveHourRateLimitMark, userId),
+			redisTotalKey:   fmt.Sprintf("rateLimit:%s:%s:%s", AccountFiveHourRateLimitMark, "T", userId),
 			redisSuccessKey: fmt.Sprintf("rateLimit:%s:%s:%s", AccountFiveHourRateLimitMark, "S", userId),
 			memTotalKey:     AccountFiveHourRateLimitMark + userId,
 			memSuccessKey:   AccountFiveHourRateLimitMark + "S" + userId,
@@ -225,7 +275,7 @@ func buildRateLimitWindows(userId, group string) []rateLimitWindow {
 			durationMinutes: 7 * 24 * 60,
 			totalMaxCount:   totalMaxCount,
 			successMaxCount: successMaxCount,
-			redisTotalKey:   fmt.Sprintf("rateLimit:%s:%s", AccountWeeklyRateLimitMark, userId),
+			redisTotalKey:   fmt.Sprintf("rateLimit:%s:%s:%s", AccountWeeklyRateLimitMark, "T", userId),
 			redisSuccessKey: fmt.Sprintf("rateLimit:%s:%s:%s", AccountWeeklyRateLimitMark, "S", userId),
 			memTotalKey:     AccountWeeklyRateLimitMark + userId,
 			memSuccessKey:   AccountWeeklyRateLimitMark + "S" + userId,
@@ -272,6 +322,16 @@ func ModelRequestRateLimit() func(c *gin.Context) {
 					return
 				}
 			}
+			allowed, msg, err := checkAndRecordRedisTotalWindows(ctx, rdb, windows)
+			if err != nil {
+				fmt.Println("检查总请求限制失败:", err.Error())
+				abortWithOpenAiMessage(c, http.StatusInternalServerError, "rate_limit_check_failed")
+				return
+			}
+			if !allowed {
+				abortWithOpenAiMessage(c, http.StatusTooManyRequests, msg)
+				return
+			}
 
 			// 处理请求
 			c.Next()
@@ -290,6 +350,9 @@ func ModelRequestRateLimit() func(c *gin.Context) {
 					abortWithOpenAiMessage(c, http.StatusTooManyRequests, msg)
 					return
 				}
+			}
+			for _, w := range windows {
+				recordMemoryTotal(w)
 			}
 
 			// 处理请求

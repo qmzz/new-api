@@ -35,19 +35,25 @@ import {
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 
-const rateLimitDialogSchema = z.object({
-  groupName: z.string().min(1, 'Group name is required'),
-  maxRequests: z
-    .number()
-    .min(0, 'Must be ≥ 0')
-    .max(2147483647, 'Must be ≤ 2,147,483,647'),
-  maxSuccess: z
-    .number()
-    .min(1, 'Must be ≥ 1')
-    .max(2147483647, 'Must be ≤ 2,147,483,647'),
-})
+const createRateLimitDialogSchema = (successAllowZero: boolean) =>
+  z.object({
+    groupName: z.string().min(1, 'Group name is required'),
+    maxRequests: z
+      .number()
+      .min(0, 'Must be ≥ 0')
+      .max(2147483647, 'Must be ≤ 2,147,483,647'),
+    maxSuccess: z
+      .number()
+      .min(
+        successAllowZero ? 0 : 1,
+        successAllowZero ? 'Must be ≥ 0' : 'Must be ≥ 1'
+      )
+      .max(2147483647, 'Must be ≤ 2,147,483,647'),
+  })
 
-type RateLimitDialogFormValues = z.infer<typeof rateLimitDialogSchema>
+type RateLimitDialogFormValues = z.infer<
+  ReturnType<typeof createRateLimitDialogSchema>
+>
 
 const RATE_LIMIT_FORM_ID = 'rate-limit-form'
 
@@ -62,6 +68,7 @@ type RateLimitDialogProps = {
   onOpenChange: (open: boolean) => void
   onSave: (data: RateLimitEntryData) => void
   editData?: RateLimitEntryData | null
+  successAllowZero?: boolean
 }
 
 export function RateLimitDialog({
@@ -69,16 +76,19 @@ export function RateLimitDialog({
   onOpenChange,
   onSave,
   editData,
+  successAllowZero = false,
 }: RateLimitDialogProps) {
   const { t } = useTranslation()
   const isEditMode = !!editData
+  const successMin = successAllowZero ? 0 : 1
+  const successFallback = successAllowZero ? 0 : 1
 
   const form = useForm<RateLimitDialogFormValues>({
-    resolver: zodResolver(rateLimitDialogSchema),
+    resolver: zodResolver(createRateLimitDialogSchema(successAllowZero)),
     defaultValues: {
       groupName: '',
       maxRequests: 0,
-      maxSuccess: 1,
+      maxSuccess: successFallback,
     },
   })
 
@@ -89,10 +99,10 @@ export function RateLimitDialog({
       form.reset({
         groupName: '',
         maxRequests: 0,
-        maxSuccess: 1,
+        maxSuccess: successFallback,
       })
     }
-  }, [editData, form, open])
+  }, [editData, form, open, successFallback])
 
   const handleSubmit = (values: RateLimitDialogFormValues) => {
     onSave(values)
@@ -172,7 +182,7 @@ export function RateLimitDialog({
                       step={1}
                       {...field}
                       onChange={(e) =>
-                        field.onChange(parseInt(e.target.value) || 0)
+                        field.onChange(Number.parseInt(e.target.value) || 0)
                       }
                     />
                     <span className='text-muted-foreground text-sm'>
@@ -198,12 +208,14 @@ export function RateLimitDialog({
                   <div className='flex items-center gap-2'>
                     <Input
                       type='number'
-                      min={1}
+                      min={successMin}
                       max={2147483647}
                       step={1}
                       {...field}
                       onChange={(e) =>
-                        field.onChange(parseInt(e.target.value) || 1)
+                        field.onChange(
+                          Number.parseInt(e.target.value) || successFallback
+                        )
                       }
                     />
                     <span className='text-muted-foreground text-sm'>
@@ -212,7 +224,11 @@ export function RateLimitDialog({
                   </div>
                 </FormControl>
                 <FormDescription>
-                  {t('Only successful requests count toward this limit.')}
+                  {successAllowZero
+                    ? t(
+                        'Only successful requests count toward this limit. 0 = unlimited.'
+                      )
+                    : t('Only successful requests count toward this limit.')}
                 </FormDescription>
                 <FormMessage />
               </FormItem>
