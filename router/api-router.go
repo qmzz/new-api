@@ -251,9 +251,23 @@ func SetApiRouter(router *gin.Engine) {
 			}
 		}
 
+		inviteCodeRoute := apiRouter.Group("/invite_code")
+		inviteCodeRoute.Use(middleware.AdminAuth())
+		{
+			inviteCodeRoute.GET("/", controller.GetAllInviteCodes)
+			inviteCodeRoute.GET("/search", controller.SearchInviteCodes)
+			inviteCodeRoute.GET("/:id", controller.GetInviteCode)
+			inviteCodeRoute.POST("/", controller.AddInviteCode)
+			inviteCodeRoute.PUT("/", controller.UpdateInviteCode)
+			inviteCodeRoute.DELETE("/invalid", controller.DeleteInvalidInviteCode)
+			inviteCodeRoute.DELETE("/:id", controller.DeleteInviteCode)
+			inviteCodeRoute.GET("/export", controller.ExportInviteCodesCSV)
+		}
+
 		redemptionRoute := apiRouter.Group("/redemption")
 		redemptionRoute.Use(middleware.AdminAuth())
 		{
+			redemptionRoute.GET("/export", controller.ExportRedemptionsCSV)
 			redemptionRoute.GET("/", controller.GetAllRedemptions)
 			redemptionRoute.GET("/search", controller.SearchRedemptions)
 			redemptionRoute.GET("/:id", controller.GetRedemption)

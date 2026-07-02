@@ -60,6 +60,7 @@ export function SignUpForm({
   const [isLoading, setIsLoading] = useState(false)
   const [verificationCode, setVerificationCode] = useState('')
   const [agreedToLegal, setAgreedToLegal] = useState(false)
+  const [inviteCode, setInviteCode] = useState('')
   const [wechatCode, setWeChatCode] = useState('')
   const [isWeChatDialogOpen, setIsWeChatDialogOpen] = useState(false)
   const [isWeChatSubmitting, setIsWeChatSubmitting] = useState(false)
@@ -163,6 +164,7 @@ export function SignUpForm({
         email: data.email || undefined,
         verification_code: verificationCode || undefined,
         aff_code: getAffiliateCode(),
+        invite_code: inviteCode || undefined,
         turnstile: turnstileToken,
       })
 
@@ -342,6 +344,22 @@ export function SignUpForm({
               siteKey={turnstileSiteKey}
               onVerify={setTurnstileToken}
             />
+          </div>
+        )}
+
+        {/* Invite Code Field */}
+        {status?.invite_code_required && (
+          <div className='space-y-2'>
+            <Label htmlFor='invite-code'>{t('Invite Code')}</Label>
+            <Input
+              id='invite-code'
+              placeholder={t('Enter your invite code')}
+              value={inviteCode}
+              onChange={(e) => setInviteCode(e.target.value)}
+            />
+            <p className='text-muted-foreground text-xs'>
+              {t('An invite code is required to register')}
+            </p>
           </div>
         )}
 

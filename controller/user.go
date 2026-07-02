@@ -194,6 +194,27 @@ func Register(c *gin.Context) {
 		common.ApiErrorI18n(c, i18n.MsgUserInputInvalid, map[string]any{"Error": err.Error()})
 		return
 	}
+	var inviteCode string
+	if common.InviteCodeRequired {
+		inviteCode = user.InviteCode
+		if inviteCode == "" {
+			inviteCode = c.Query("invite_code")
+		}
+		if inviteCode == "" {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": "注册需要邀请码",
+			})
+			return
+		}
+		if _, err := model.ValidateInviteCode(inviteCode); err != nil {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": err.Error(),
+			})
+			return
+		}
+	}
 	if common.EmailVerificationEnabled {
 		if user.Email == "" || user.VerificationCode == "" {
 			common.ApiErrorI18n(c, i18n.MsgUserEmailVerificationRequired)
@@ -236,6 +257,14 @@ func Register(c *gin.Context) {
 	if err := model.DB.Where("username = ?", cleanUser.Username).First(&insertedUser).Error; err != nil {
 		common.ApiErrorI18n(c, i18n.MsgUserRegisterFailed)
 		return
+	}
+
+	// 消费邀请码
+	if common.InviteCodeRequired && inviteCode != "" {
+		if err := model.UseInviteCode(model.DB, inviteCode, insertedUser.Id); err != nil {
+			common.SysLog("failed to use invite code: " + err.Error())
+			// 不阻塞注册流程，邀请码消费失败仅记录日志
+		}
 	}
 	// 生成默认令牌
 	if constant.GenerateDefaultToken {

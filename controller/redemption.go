@@ -3,6 +3,7 @@ package controller
 import (
 	"net/http"
 	"strconv"
+	"time"
 	"unicode/utf8"
 
 	"github.com/QuantumNous/new-api/common"
@@ -196,4 +197,47 @@ func validateExpiredTime(c *gin.Context, expired int64) (bool, string) {
 		return false, i18n.T(c, i18n.MsgRedemptionExpireTimeInvalid)
 	}
 	return true, ""
+}
+
+func ExportRedemptionsCSV(c *gin.Context) {
+	pageInfo := common.GetPageQuery(c)
+	pageInfo.SetPageSize(10000)
+	redemptions, _, err := model.GetAllRedemptions(pageInfo.GetStartIdx(), pageInfo.GetPageSize())
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+
+	c.Header("Content-Type", "text/csv; charset=utf-8")
+	c.Header("Content-Disposition", "attachment; filename=redemption_codes.csv")
+	c.Writer.Write([]byte{0xEF, 0xBB, 0xBF})
+
+	c.Writer.WriteString("ID,Name,Key,Status,Quota,Created,Expires,Used By\n")
+	for _, r := range redemptions {
+		statusStr := "Enabled"
+		if r.Status == common.RedemptionCodeStatusDisabled {
+			statusStr = "Disabled"
+		} else if r.Status == common.RedemptionCodeStatusUsed {
+			statusStr = "Used"
+		}
+		createdStr := time.Unix(r.CreatedTime, 0).Format("2006-01-02 15:04:05")
+		expiredStr := "Never"
+		if r.ExpiredTime > 0 {
+			expiredStr = time.Unix(r.ExpiredTime, 0).Format("2006-01-02 15:04:05")
+		}
+		usedByStr := "-"
+		if r.UsedUserId > 0 {
+			usedByStr = strconv.Itoa(r.UsedUserId)
+		}
+		c.Writer.WriteString(
+			strconv.Itoa(r.Id) + "," +
+				r.Name + "," +
+				r.Key + "," +
+				statusStr + "," +
+				strconv.Itoa(r.Quota) + "," +
+				createdStr + "," +
+				expiredStr + "," +
+				usedByStr + "\n",
+		)
+	}
 }
