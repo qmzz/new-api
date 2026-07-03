@@ -39,9 +39,12 @@ export async function searchInviteCodes(
   params: SearchInviteCodesParams
 ): Promise<GetInviteCodesResponse> {
   const { keyword = '', p = 1, page_size = 10 } = params
-  const res = await api.get(
-    `/api/invite_code/search?keyword=${keyword}&p=${p}&page_size=${page_size}`
-  )
+  const query = new URLSearchParams({
+    keyword,
+    p: String(p),
+    page_size: String(page_size),
+  })
+  const res = await api.get(`/api/invite_code/search?${query}`)
   return res.data
 }
 

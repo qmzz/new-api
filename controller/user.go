@@ -247,38 +247,7 @@ func Register(c *gin.Context) {
 	if common.EmailVerificationEnabled {
 		cleanUser.Email = user.Email
 	}
-	if common.InviteCodeRequired && inviteCode != "" {
-		// 邀请码注册：事务内完成用户创建+邀请码消费，防止竞态
-		err := model.DB.Transaction(func(tx *gorm.DB) error {
-			if err := cleanUser.InsertWithTx(tx, inviterId); err != nil {
-				return err
-			}
-			return model.UseInviteCode(tx, inviteCode, cleanUser.Id)
-		})
-		if err != nil {
-			common.ApiError(c, err)
-			return
-		}
-		// 事务提交后执行非关键的后续任务（边栏配置、日志、邀请奖励）
-		cleanUser.FinishInsert(inviterId)
-	} else {
-		if err := cleanUser.Insert(inviterId); err != nil {
-			common.ApiError(c, err)
-			return
-		}
-	}
-
-	// 获取插入后的用户ID
-	insertedUser := cleanUser
-	if insertedUser.Id == 0 {
-		var u model.User
-		if err := model.DB.Where("username = ?", cleanUser.Username).First(&u).Error; err != nil {
-			common.ApiErrorI18n(c, i18n.MsgUserRegisterFailed)
-			return
-		}
-		insertedUser = u
-	}
-	// 生成默认令牌
+	var defaultToken *model.Token
 	if constant.GenerateDefaultToken {
 		key, err := common.GenerateKey()
 		if err != nil {
@@ -286,9 +255,7 @@ func Register(c *gin.Context) {
 			common.SysLog("failed to generate token key: " + err.Error())
 			return
 		}
-		// 生成默认令牌
-		token := model.Token{
-			UserId:             insertedUser.Id, // 使用插入后的用户ID
+		defaultToken = &model.Token{
 			Name:               cleanUser.Username + "的初始令牌",
 			Key:                key,
 			CreatedTime:        common.GetTimestamp(),
@@ -299,10 +266,53 @@ func Register(c *gin.Context) {
 			ModelLimitsEnabled: false,
 		}
 		if setting.DefaultUseAutoGroup {
-			token.Group = "auto"
+			defaultToken.Group = "auto"
 		}
-		if err := token.Insert(); err != nil {
-			common.ApiErrorI18n(c, i18n.MsgCreateDefaultTokenErr)
+	}
+
+	if common.InviteCodeRequired && inviteCode != "" {
+		// 邀请码注册：事务内完成用户创建+邀请码消费+默认令牌创建，防止竞态和半成功状态
+		err := model.DB.Transaction(func(tx *gorm.DB) error {
+			if err := cleanUser.InsertWithTx(tx, inviterId); err != nil {
+				return err
+			}
+			if err := model.UseInviteCode(tx, inviteCode, cleanUser.Id); err != nil {
+				return err
+			}
+			if defaultToken != nil {
+				defaultToken.UserId = cleanUser.Id
+				if err := defaultToken.InsertWithTx(tx); err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			common.ApiError(c, err)
+			return
+		}
+		// 事务提交后执行非关键的后续任务（边栏配置、日志、邀请奖励）
+		cleanUser.FinishInsert(inviterId)
+	} else if defaultToken != nil {
+		// 普通注册也将用户创建+默认令牌创建放入同一事务，避免默认令牌失败导致半成功账号
+		err := model.DB.Transaction(func(tx *gorm.DB) error {
+			if err := cleanUser.InsertWithTx(tx, inviterId); err != nil {
+				return err
+			}
+			defaultToken.UserId = cleanUser.Id
+			if err := defaultToken.InsertWithTx(tx); err != nil {
+				return err
+			}
+			return nil
+		})
+		if err != nil {
+			common.ApiError(c, err)
+			return
+		}
+		cleanUser.FinishInsert(inviterId)
+	} else {
+		if err := cleanUser.Insert(inviterId); err != nil {
+			common.ApiError(c, err)
 			return
 		}
 	}

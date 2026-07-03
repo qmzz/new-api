@@ -211,10 +211,16 @@ func ExportRedemptionsCSV(c *gin.Context) {
 
 	c.Header("Content-Type", "text/csv; charset=utf-8")
 	c.Header("Content-Disposition", "attachment; filename=redemption_codes.csv")
-	c.Writer.Write([]byte{0xEF, 0xBB, 0xBF})
+	if _, err := c.Writer.Write([]byte{0xEF, 0xBB, 0xBF}); err != nil {
+		logger.SysLog("failed to write redemption csv BOM: " + err.Error())
+		return
+	}
 
 	w := csv.NewWriter(c.Writer)
-	w.Write([]string{"ID", "Name", "Key", "Status", "Quota", "Created", "Expires", "Used By"})
+	if err := w.Write([]string{"ID", "Name", "Key", "Status", "Quota", "Created", "Expires", "Used By"}); err != nil {
+		logger.SysLog("failed to write redemption csv header: " + err.Error())
+		return
+	}
 	for _, r := range redemptions {
 		statusStr := "Enabled"
 		if r.Status == common.RedemptionCodeStatusDisabled {
@@ -231,7 +237,7 @@ func ExportRedemptionsCSV(c *gin.Context) {
 		if r.UsedUserId > 0 {
 			usedByStr = strconv.Itoa(r.UsedUserId)
 		}
-		w.Write([]string{
+		if err := w.Write([]string{
 			strconv.Itoa(r.Id),
 			r.Name,
 			r.Key,
@@ -240,7 +246,14 @@ func ExportRedemptionsCSV(c *gin.Context) {
 			createdStr,
 			expiredStr,
 			usedByStr,
-		})
+		}); err != nil {
+			logger.SysLog("failed to write redemption csv row: " + err.Error())
+			return
+		}
 	}
 	w.Flush()
+	if err := w.Error(); err != nil {
+		logger.SysLog("failed to flush redemption csv: " + err.Error())
+		return
+	}
 }

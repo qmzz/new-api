@@ -93,6 +93,13 @@ func AddInviteCode(c *gin.Context) {
 		})
 		return
 	}
+	if code.ExpiredTime != 0 && code.ExpiredTime < common.GetTimestamp() {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": "邀请码过期时间不能早于当前时间",
+		})
+		return
+	}
 
 	var keys []string
 	for i := 0; i < code.Count; i++ {
@@ -164,6 +171,13 @@ func UpdateInviteCode(c *gin.Context) {
 			})
 			return
 		}
+		if code.ExpiredTime != 0 && code.ExpiredTime < common.GetTimestamp() {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": "邀请码过期时间不能早于当前时间",
+			})
+			return
+		}
 		cleanCode.Name = code.Name
 		cleanCode.ExpiredTime = code.ExpiredTime
 	}
@@ -215,10 +229,16 @@ func ExportInviteCodesCSV(c *gin.Context) {
 
 	c.Header("Content-Type", "text/csv; charset=utf-8")
 	c.Header("Content-Disposition", "attachment; filename=invite_codes.csv")
-	c.Writer.Write([]byte{0xEF, 0xBB, 0xBF}) // BOM for Excel
+	if _, err := c.Writer.Write([]byte{0xEF, 0xBB, 0xBF}); err != nil { // BOM for Excel
+		logger.SysLog("failed to write invite codes csv BOM: " + err.Error())
+		return
+	}
 
 	w := csv.NewWriter(c.Writer)
-	w.Write([]string{"ID", "Name", "Key", "Status", "Created", "Expires", "Used By"})
+	if err := w.Write([]string{"ID", "Name", "Key", "Status", "Created", "Expires", "Used By"}); err != nil {
+		logger.SysLog("failed to write invite codes csv header: " + err.Error())
+		return
+	}
 	for _, code := range codes {
 		statusStr := "Enabled"
 		if code.Status == common.InviteCodeStatusDisabled {
@@ -235,7 +255,7 @@ func ExportInviteCodesCSV(c *gin.Context) {
 		if code.UsedUserId > 0 {
 			usedByStr = strconv.Itoa(code.UsedUserId)
 		}
-		w.Write([]string{
+		if err := w.Write([]string{
 			strconv.Itoa(code.Id),
 			code.Name,
 			code.Key,
@@ -243,7 +263,14 @@ func ExportInviteCodesCSV(c *gin.Context) {
 			createdStr,
 			expiredStr,
 			usedByStr,
-		})
+		}); err != nil {
+			logger.SysLog("failed to write invite codes csv row: " + err.Error())
+			return
+		}
 	}
 	w.Flush()
+	if err := w.Error(); err != nil {
+		logger.SysLog("failed to flush invite codes csv: " + err.Error())
+		return
+	}
 }

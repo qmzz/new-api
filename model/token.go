@@ -289,6 +289,10 @@ func (token *Token) Insert() error {
 	return err
 }
 
+func (token *Token) InsertWithTx(tx *gorm.DB) error {
+	return tx.Create(token).Error
+}
+
 // Update Make sure your token's fields is completed, because this will update non-zero values
 func (token *Token) Update() (err error) {
 	defer func() {

@@ -94,22 +94,22 @@ func UseInviteCode(tx *gorm.DB, key string, userId int) error {
 		keyCol = `"key"`
 	}
 
-	code := &InviteCode{}
-	err := tx.Set("gorm:query_option", "FOR UPDATE").Where(keyCol+" = ?", key).First(code).Error
-	if err != nil {
-		return errors.New("invalid invite code")
+	now := common.GetTimestamp()
+	result := tx.Model(&InviteCode{}).
+		Where(keyCol+" = ? AND status = ? AND (expired_time = 0 OR expired_time >= ?)", key, common.InviteCodeStatusEnabled, now).
+		Updates(map[string]interface{}{
+			"status":       common.InviteCodeStatusUsed,
+			"used_time":    now,
+			"used_user_id": userId,
+		})
+	if result.Error != nil {
+		return result.Error
 	}
-	if code.Status != common.InviteCodeStatusEnabled {
-		return errors.New("this invite code has been used or disabled")
-	}
-	if code.ExpiredTime != 0 && code.ExpiredTime < common.GetTimestamp() {
-		return errors.New("this invite code has expired")
+	if result.RowsAffected != 1 {
+		return errors.New("invalid, used, disabled, or expired invite code")
 	}
 
-	code.UsedTime = common.GetTimestamp()
-	code.Status = common.InviteCodeStatusUsed
-	code.UsedUserId = userId
-	return tx.Save(code).Error
+	return nil
 }
 
 func (code *InviteCode) Insert() error {
