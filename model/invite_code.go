@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/logger"
 
 	"gorm.io/gorm"
 )
@@ -141,6 +140,6 @@ func DeleteInvalidInviteCodes() (int64, error) {
 	result := DB.Where("status IN ? OR (status = ? AND expired_time != 0 AND expired_time < ?)",
 		[]int{common.InviteCodeStatusUsed, common.InviteCodeStatusDisabled},
 		common.InviteCodeStatusEnabled, now).Delete(&InviteCode{})
-	logger.SysLog(fmt.Sprintf("deleted %d invalid invite codes", result.RowsAffected))
+	common.SysLog(fmt.Sprintf("deleted %d invalid invite codes", result.RowsAffected))
 	return result.RowsAffected, result.Error
 }
