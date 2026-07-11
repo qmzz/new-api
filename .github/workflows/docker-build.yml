@@ -21,14 +21,15 @@ env:
   IMAGE_NAME: ghcr.io/qmzz/new-api
 
 jobs:
-  build:
-    name: Build and publish multi-arch image
+  prepare:
+    name: Resolve image version
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write
-      id-token: write
-
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+      sha_tag: ${{ steps.version.outputs.sha_tag }}
+      ref: ${{ steps.version.outputs.ref }}
     steps:
       - name: Check out release source
         uses: actions/checkout@v4
@@ -41,23 +42,40 @@ jobs:
         env:
           TAG_NAME: ${{ inputs.tag || github.event.release.tag_name || github.ref_name }}
         run: |
-          if [ -z "$TAG_NAME" ]; then
-            echo "::error::Unable to resolve the tag name"
-            exit 1
-          fi
-
-          if ! git show-ref --verify --quiet "refs/tags/$TAG_NAME"; then
+          if [ -z "$TAG_NAME" ] || ! git show-ref --verify --quiet "refs/tags/$TAG_NAME"; then
             echo "::error::Tag '$TAG_NAME' does not exist"
             exit 1
           fi
 
-          SHORT_SHA=$(git rev-parse --short=12 HEAD)
-          printf '%s\n' "$TAG_NAME" > VERSION
           echo "tag=$TAG_NAME" >> "$GITHUB_OUTPUT"
-          echo "short_sha=$SHORT_SHA" >> "$GITHUB_OUTPUT"
+          echo "sha_tag=sha-$(git rev-parse --short=12 HEAD)" >> "$GITHUB_OUTPUT"
+          echo "ref=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+  build:
+    name: Build and push (${{ matrix.arch }})
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            platform: linux/amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Check out release source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.ref }}
+
+      - name: Write VERSION
+        run: printf '%s\n' '${{ needs.prepare.outputs.tag }}' > VERSION
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -74,35 +92,60 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.IMAGE_NAME }}
-          tags: |
-            type=raw,value=${{ steps.version.outputs.tag }}
-            type=raw,value=latest
-            type=raw,value=sha-${{ steps.version.outputs.short_sha }}
 
       - name: Build and push image
-        id: build
         uses: docker/build-push-action@v6
         with:
           context: .
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ matrix.platform }}
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: |
+            ${{ env.IMAGE_NAME }}:${{ needs.prepare.outputs.tag }}-${{ matrix.arch }}
+            ${{ env.IMAGE_NAME }}:latest-${{ matrix.arch }}
+            ${{ env.IMAGE_NAME }}:${{ needs.prepare.outputs.sha_tag }}-${{ matrix.arch }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=ghcr-multiarch
-          cache-to: type=gha,mode=max,scope=ghcr-multiarch
+          cache-from: type=gha,scope=ghcr-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=ghcr-${{ matrix.arch }}
           provenance: mode=max
           sbom: true
 
-      - name: Install cosign
-        uses: sigstore/cosign-installer@v3
+  manifest:
+    name: Publish multi-arch manifests
+    needs: [prepare, build]
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    steps:
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-      - name: Sign image
-        run: cosign sign --yes "${IMAGE_NAME}@${{ steps.build.outputs.digest }}"
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Publish summary
+      - name: Publish version manifest
         run: |
-          echo "### Published GHCR image" >> "$GITHUB_STEP_SUMMARY"
-          echo '```text' >> "$GITHUB_STEP_SUMMARY"
-          echo "${{ steps.meta.outputs.tags }}" >> "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
-          echo "Digest: ${{ steps.build.outputs.digest }}" >> "$GITHUB_STEP_SUMMARY"
+          docker buildx imagetools create \
+            --tag "${IMAGE_NAME}:${{ needs.prepare.outputs.tag }}" \
+            "${IMAGE_NAME}:${{ needs.prepare.outputs.tag }}-amd64" \
+            "${IMAGE_NAME}:${{ needs.prepare.outputs.tag }}-arm64"
+
+      - name: Publish latest manifest
+        run: |
+          docker buildx imagetools create \
+            --tag "${IMAGE_NAME}:latest" \
+            "${IMAGE_NAME}:latest-amd64" \
+            "${IMAGE_NAME}:latest-arm64"
+
+      - name: Publish commit manifest
+        run: |
+          docker buildx imagetools create \
+            --tag "${IMAGE_NAME}:${{ needs.prepare.outputs.sha_tag }}" \
+            "${IMAGE_NAME}:${{ needs.prepare.outputs.sha_tag }}-amd64" \
+            "${IMAGE_NAME}:${{ needs.prepare.outputs.sha_tag }}-arm64"
+
+      - name: Verify image
+        run: docker buildx imagetools inspect "${IMAGE_NAME}:${{ needs.prepare.outputs.tag }}"
