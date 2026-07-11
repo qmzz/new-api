@@ -20,18 +20,18 @@ import { ArrowLeft, ExternalLink, RotateCcw } from 'lucide-react'
 import { type ReactNode, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { GroupBadge } from '@/components/group-badge'
-import { PublicLayout } from '@/components/layout'
-import { PageTransition } from '@/components/page-transition'
-import { StatusBadge } from '@/components/status-badge'
-import { Button } from '@/components/ui/button'
+import { Button } from '@/components/design-system/button'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select'
+} from '@/components/design-system/select'
+import { GroupBadge } from '@/components/group-badge'
+import { PublicLayout } from '@/components/layout'
+import { PageTransition } from '@/components/page-transition'
+import { StatusBadge } from '@/components/status-badge'
 import { getLobeIcon } from '@/lib/lobe-icon'
 import { cn } from '@/lib/utils'
 

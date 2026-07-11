@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { type Table } from '@tanstack/react-table'
+import type { Table } from '@tanstack/react-table'
 import { Trash2 } from 'lucide-react'
 import { useState, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -25,7 +25,7 @@ import { toast } from 'sonner'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { CopyButton } from '@/components/copy-button'
 import { DataTableBulkActions as BulkActionsToolbar } from '@/components/data-table'
-import { Button } from '@/components/ui/button'
+import { Button } from '@/components/design-system/button'
 import {
   Tooltip,
   TooltipContent,
@@ -33,7 +33,7 @@ import {
 } from '@/components/ui/tooltip'
 
 import { deleteInvalidInviteCodes } from '../api'
-import { type InviteCode } from '../types'
+import type { InviteCode } from '../types'
 import { useInviteCodes } from './invite-codes-provider'
 
 type DataTableBulkActionsProps<TData> = {
@@ -121,8 +121,7 @@ export function DataTableBulkActions<TData>({
           <>
             {t('This will delete all')} <strong>{t('used')}</strong>,{' '}
             <strong>{t('disabled')}</strong>
-            {t(', and')} <strong>{t('expired')}</strong>{' '}
-            {t('invite codes.')}
+            {t(', and')} <strong>{t('expired')}</strong> {t('invite codes.')}
             <br />
             {t('This action cannot be undone.')}
           </>

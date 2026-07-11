@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { type ColumnDef } from '@tanstack/react-table'
+import type { ColumnDef } from '@tanstack/react-table'
 import { useTranslation } from 'react-i18next'
 
 import { MaskedValueDisplay } from '@/components/masked-value-display'
@@ -30,12 +30,9 @@ import {
 } from '@/components/ui/tooltip'
 import { formatTimestampToDate } from '@/lib/format'
 
-import {
-  INVITE_CODE_FILTER_EXPIRED,
-  INVITE_CODE_STATUSES,
-} from '../constants'
+import { INVITE_CODE_FILTER_EXPIRED, INVITE_CODE_STATUSES } from '../constants'
 import { isInviteCodeExpired, isTimestampExpired } from '../lib'
-import { type InviteCode } from '../types'
+import type { InviteCode } from '../types'
 import { DataTableRowActions } from './data-table-row-actions'
 
 export function useInviteCodesColumns(): ColumnDef<InviteCode>[] {
@@ -213,7 +210,7 @@ export function useInviteCodesColumns(): ColumnDef<InviteCode>[] {
                   className='cursor-help'
                 />
               }
-            ></TooltipTrigger>
+            />
             <TooltipContent>
               <div className='space-y-1 text-xs'>
                 <div>
@@ -221,8 +218,7 @@ export function useInviteCodesColumns(): ColumnDef<InviteCode>[] {
                 </div>
                 {code.used_time > 0 && (
                   <div>
-                    {t('Used:')}{' '}
-                    {formatTimestampToDate(code.used_time)}
+                    {t('Used:')} {formatTimestampToDate(code.used_time)}
                   </div>
                 )}
               </div>

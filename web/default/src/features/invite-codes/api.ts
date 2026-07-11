@@ -73,7 +73,10 @@ export async function updateInviteCodeStatus(
   id: number,
   status: number
 ): Promise<ApiResponse<InviteCode>> {
-  const res = await api.put('/api/invite_code/?status_only=true', { id, status })
+  const res = await api.put('/api/invite_code/?status_only=true', {
+    id,
+    status,
+  })
   return res.data
 }
 

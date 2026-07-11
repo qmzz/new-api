@@ -24,10 +24,11 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import type { z } from 'zod'
 
+import { Button } from '@/components/design-system/button'
+import { Input } from '@/components/design-system/input'
 import { Dialog } from '@/components/dialog'
 import { PasswordInput } from '@/components/password-input'
 import { Turnstile } from '@/components/turnstile'
-import { Button } from '@/components/ui/button'
 import {
   Form,
   FormControl,
@@ -36,7 +37,6 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { register, wechatLoginByCode } from '@/features/auth/api'
 import { LegalConsent } from '@/features/auth/components/legal-consent'
@@ -180,7 +180,7 @@ export function SignUpForm({
       } else {
         toast.error(res?.message || t('Failed to create account'))
       }
-    } catch (_error) {
+    } catch {
       // Errors are handled by global interceptor
     } finally {
       setIsLoading(false)
@@ -224,11 +224,21 @@ export function SignUpForm({
       } else {
         toast.error(res?.message || t('Login failed'))
       }
-    } catch (_error) {
+    } catch {
       toast.error(t('Login failed'))
     } finally {
       setIsWeChatSubmitting(false)
     }
+  }
+
+  const renderVerificationButtonContent = () => {
+    if (isActive) {
+      return t('Resend ({{seconds}}s)', { seconds: secondsLeft })
+    }
+    if (isSendingCode) {
+      return <Loader2 className='h-4 w-4 animate-spin' />
+    }
+    return t('Send code')
   }
 
   return (
@@ -331,13 +341,7 @@ export function SignUpForm({
                 }
                 onClick={handleSendVerificationCode}
               >
-                {isActive ? (
-                  t('Resend ({{seconds}}s)', { seconds: secondsLeft })
-                ) : isSendingCode ? (
-                  <Loader2 className='h-4 w-4 animate-spin' />
-                ) : (
-                  t('Send code')
-                )}
+                {renderVerificationButtonContent()}
               </Button>
             </div>
           </>
@@ -379,7 +383,8 @@ export function SignUpForm({
         {/* Submit Button */}
         <Button
           type='submit'
-          className='mt-2 w-full justify-center gap-2'
+          size='xl'
+          className='mt-2 w-full justify-center'
           disabled={
             isLoading ||
             (requiresLegalConsent && !agreedToLegal) ||
@@ -409,7 +414,7 @@ export function SignUpForm({
           description={t(
             'Scan the QR code to follow the official account and reply with “验证码” to receive your verification code.'
           )}
-          contentClassName='max-w-sm'
+          contentClassName='sm:max-w-sm'
           headerClassName='text-left'
           contentHeight='auto'
           bodyClassName='space-y-4'

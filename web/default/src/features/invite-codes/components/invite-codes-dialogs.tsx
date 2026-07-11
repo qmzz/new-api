@@ -23,14 +23,12 @@ export function InviteCodesDialogs() {
   const { open, setOpen, currentRow } = useInviteCodes()
 
   return (
-    <>
-      <InviteCodesMutateDrawer
-        open={open === 'create' || open === 'update'}
-        onOpenChange={(v) => {
-          if (!v) setOpen(null)
-        }}
-        currentRow={open === 'update' ? (currentRow ?? undefined) : undefined}
-      />
-    </>
+    <InviteCodesMutateDrawer
+      open={open === 'create' || open === 'update'}
+      onOpenChange={(v) => {
+        if (!v) setOpen(null)
+      }}
+      currentRow={open === 'update' ? (currentRow ?? undefined) : undefined}
+    />
   )
 }

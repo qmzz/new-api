@@ -1,7 +1,10 @@
 import type { TFunction } from 'i18next'
 import { z } from 'zod'
 
-import { INVITE_CODE_VALIDATION, getInviteCodeFormErrorMessages } from '../constants'
+import {
+  INVITE_CODE_VALIDATION,
+  getInviteCodeFormErrorMessages,
+} from '../constants'
 import type { InviteCodeFormData, InviteCode } from '../types'
 
 export function getInviteCodeFormSchema(t: TFunction) {
@@ -50,9 +53,7 @@ export function transformInviteCodeToFormDefaults(
   return {
     name: code.name,
     expired_time:
-      code.expired_time > 0
-        ? new Date(code.expired_time * 1000)
-        : undefined,
+      code.expired_time > 0 ? new Date(code.expired_time * 1000) : undefined,
     count: 1,
   }
 }

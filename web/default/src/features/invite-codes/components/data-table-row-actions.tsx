@@ -37,12 +37,9 @@ import {
 } from '@/components/ui/tooltip'
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
 
-import {
-  deleteInviteCode,
-  updateInviteCodeStatus,
-} from '../api'
+import { deleteInviteCode, updateInviteCodeStatus } from '../api'
 import { INVITE_CODE_STATUS } from '../constants'
-import { type InviteCode } from '../types'
+import type { InviteCode } from '../types'
 import { useInviteCodes } from './invite-codes-provider'
 
 interface DataTableRowActionsProps<TData> {
@@ -97,13 +94,14 @@ export function DataTableRowActions<TData>({
               <TooltipTrigger
                 render={
                   <button
+                    type='button'
                     className='hover:bg-muted flex size-8 items-center justify-center rounded-md border'
                     aria-label={t('Open menu')}
                   />
                 }
               >
                 <Pencil className='size-4' />
-              </button>
+              </TooltipTrigger>
               <TooltipContent>
                 <p>{t('Actions')}</p>
               </TooltipContent>
@@ -169,7 +167,10 @@ export function DataTableRowActions<TData>({
         isLoading={isDeleting}
         className='max-w-md'
         title={t('Delete Invite Code')}
-        desc={t('This will permanently delete invite code') + ` "${code.name}". ${t('This action cannot be undone.')}`}
+        desc={
+          t('This will permanently delete invite code') +
+          ` "${code.name}". ${t('This action cannot be undone.')}`
+        }
         confirmText={t('Delete')}
       />
     </>

@@ -20,7 +20,7 @@ import React, { useState } from 'react'
 
 import useDialogState from '@/hooks/use-dialog'
 
-import { type InviteCode, type InviteCodesDialogType } from '../types'
+import type { InviteCode, InviteCodesDialogType } from '../types'
 
 type InviteCodesContextType = {
   open: InviteCodesDialogType | null
@@ -62,6 +62,7 @@ export function InviteCodesProvider({
   )
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useInviteCodes = () => {
   const ctx = React.useContext(InviteCodesContext)
 

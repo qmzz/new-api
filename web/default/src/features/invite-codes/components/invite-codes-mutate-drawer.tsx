@@ -23,6 +23,8 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { DateTimePicker } from '@/components/datetime-picker'
+import { Button } from '@/components/design-system/button'
+import { Input } from '@/components/design-system/input'
 import {
   SideDrawerSection,
   sideDrawerContentClassName,
@@ -30,7 +32,6 @@ import {
   sideDrawerFormClassName,
   sideDrawerHeaderClassName,
 } from '@/components/drawer-layout'
-import { Button } from '@/components/ui/button'
 import {
   Form,
   FormControl,
@@ -40,7 +41,6 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form'
-import { Input } from '@/components/ui/input'
 import {
   Sheet,
   SheetClose,
@@ -61,7 +61,7 @@ import {
   transformFormDataToPayload,
   transformInviteCodeToFormDefaults,
 } from '../lib'
-import { type InviteCode } from '../types'
+import type { InviteCode } from '../types'
 import { useInviteCodes } from './invite-codes-provider'
 
 type InviteCodesMutateDrawerProps = {
@@ -87,15 +87,19 @@ export function InviteCodesMutateDrawer({
 
   useEffect(() => {
     if (open && isUpdate && currentRow) {
-      getInviteCode(currentRow.id).then((result) => {
-        if (result.success && result.data) {
-          form.reset(transformInviteCodeToFormDefaults(result.data))
-        }
-      })
+      void getInviteCode(currentRow.id)
+        .then((result) => {
+          if (result.success && result.data) {
+            form.reset(transformInviteCodeToFormDefaults(result.data))
+          }
+        })
+        .catch(() => {
+          toast.error(t('Failed to load invite code'))
+        })
     } else if (open && !isUpdate) {
       form.reset(INVITE_CODE_FORM_DEFAULT_VALUES)
     }
-  }, [open, isUpdate, currentRow, form])
+  }, [open, isUpdate, currentRow, form, t])
 
   const onSubmit = async (data: InviteCodeFormValues) => {
     setIsSubmitting(true)
@@ -150,9 +154,7 @@ export function InviteCodesMutateDrawer({
       <SheetContent className={sideDrawerContentClassName('sm:max-w-[500px]')}>
         <SheetHeader className={sideDrawerHeaderClassName()}>
           <SheetTitle>
-            {isUpdate
-              ? t('Update Invite Code')
-              : t('Create Invite Code')}
+            {isUpdate ? t('Update Invite Code') : t('Create Invite Code')}
           </SheetTitle>
           <SheetDescription>
             {isUpdate
@@ -249,7 +251,9 @@ export function InviteCodesMutateDrawer({
                           max='100'
                           placeholder={t('Number of codes to create')}
                           onChange={(e) =>
-                            field.onChange(parseInt(e.target.value, 10) || 1)
+                            field.onChange(
+                              Number.parseInt(e.target.value, 10) || 1
+                            )
                           }
                         />
                       </FormControl>

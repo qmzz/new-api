@@ -97,10 +97,7 @@ function hardenIsolatedHtml(html: string): string {
 
   template.content.querySelectorAll('a[target="_blank"]').forEach((link) => {
     const rel = new Set(
-      link
-        .getAttribute('rel')
-        ?.split(/\s+/)
-        .filter(Boolean) ?? []
+      link.getAttribute('rel')?.split(/\s+/).filter(Boolean) ?? []
     )
 
     rel.add('noopener')
@@ -134,6 +131,11 @@ function sanitizeHtmlContent(
   return DOMPurify.sanitize(content)
 }
 
+function syncDarkClass(wrapper: HTMLElement): void {
+  const isDark = document.documentElement.classList.contains('dark')
+  wrapper.classList.toggle('dark', isDark)
+}
+
 function IsolatedHtmlContent(props: {
   className?: string
   html: string
@@ -142,18 +144,42 @@ function IsolatedHtmlContent(props: {
 
   useEffect(() => {
     const container = containerRef.current
-    if (!container) return
+    if (!container) {
+      return
+    }
 
     const shadowRoot =
       container.shadowRoot ?? container.attachShadow({ mode: 'open' })
-    shadowRoot.innerHTML = `${isolatedContentBaseStyles}${props.html}`
+    const applicationStyleNodes = [
+      ...document.head.querySelectorAll<HTMLLinkElement | HTMLStyleElement>(
+        'style, link[rel="stylesheet"]'
+      ),
+    ].map((node) => node.cloneNode(true))
+
+    const wrapper = document.createElement('div')
+    syncDarkClass(wrapper)
+    wrapper.innerHTML = props.html
+
+    const contentTemplate = document.createElement('template')
+    contentTemplate.innerHTML = isolatedContentBaseStyles
+
+    shadowRoot.replaceChildren(
+      ...applicationStyleNodes,
+      contentTemplate.content,
+      wrapper
+    )
+
+    const observer = new MutationObserver(() => syncDarkClass(wrapper))
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class'],
+    })
+
+    return () => observer.disconnect()
   }, [props.html])
 
   return (
-    <div
-      ref={containerRef}
-      className={cn('block w-full', props.className)}
-    />
+    <div ref={containerRef} className={cn('block w-full', props.className)} />
   )
 }
 
