@@ -87,3 +87,31 @@ func (l *InMemoryRateLimiter) Check(key string, maxRequestNum int, duration int6
 	now := time.Now().Unix()
 	return now-(*queue)[0] >= duration
 }
+
+// Snapshot returns the number of events still inside the sliding window and
+// the Unix timestamp when the oldest event expires. It does not record a
+// request or extend the window.
+func (l *InMemoryRateLimiter) Snapshot(key string, duration int64) (count int, resetAt int64) {
+	l.mutex.Lock()
+	defer l.mutex.Unlock()
+
+	queue, ok := l.store[key]
+	if !ok || duration <= 0 {
+		return 0, 0
+	}
+
+	now := time.Now().Unix()
+	firstValid := 0
+	for firstValid < len(*queue) && now-(*queue)[firstValid] >= duration {
+		firstValid++
+	}
+	if firstValid > 0 {
+		*queue = append((*queue)[:0], (*queue)[firstValid:]...)
+	}
+	if len(*queue) == 0 {
+		delete(l.store, key)
+		return 0, 0
+	}
+
+	return len(*queue), (*queue)[0] + duration
+}

@@ -29,6 +29,7 @@ import { AnnouncementsPanel } from './announcements-panel'
 import { ApiInfoPanel } from './api-info-panel'
 import { FAQPanel } from './faq-panel'
 import { PerformanceHealthPanel } from './performance-health-panel'
+import { RateLimitStatus } from './rate-limit-status'
 import { SummaryCards } from './summary-cards'
 import { UptimePanel } from './uptime-panel'
 
@@ -49,6 +50,7 @@ export function OverviewDashboard() {
   return (
     <div className='flex flex-col gap-4'>
       <SummaryCards />
+      <RateLimitStatus />
 
       {showContentPanels && (
         <CardStaggerContainer

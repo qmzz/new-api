@@ -3712,6 +3712,8 @@
     "Request Header Overrides": "Ghi đè Tiêu đề Yêu cầu",
     "Request ID": "ID yêu cầu",
     "Request Limits": "Hạn mức yêu cầu",
+    "Successful requests": "Successful requests",
+    "Total requests": "Total requests",
     "Request Model": "Mô hình yêu cầu",
     "Request Model:": "Mô hình yêu cầu:",
     "Request overrides, routing behavior, and upstream model automation": "Ghi đè yêu cầu, hành vi định tuyến và tự động hóa mô hình upstream",

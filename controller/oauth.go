@@ -116,6 +116,8 @@ func HandleOAuth(c *gin.Context) {
 			common.ApiErrorI18n(c, i18n.MsgOAuthUserDeleted)
 		case *OAuthRegistrationDisabledError:
 			common.ApiErrorI18n(c, i18n.MsgUserRegisterDisabled)
+		case *OAuthInviteCodeRequiredError:
+			common.ApiErrorMsg(c, "注册需要邀请码，请使用账号密码注册")
 		case *OAuthEmailAlreadyTakenError:
 			common.ApiErrorI18n(c, i18n.MsgUserEmailAlreadyTaken)
 		default:
@@ -243,6 +245,9 @@ func findOrCreateOAuthUser(c *gin.Context, provider oauth.Provider, oauthUser *o
 	if !common.RegisterEnabled {
 		return nil, &OAuthRegistrationDisabledError{}
 	}
+	if common.InviteCodeRequired {
+		return nil, &OAuthInviteCodeRequiredError{}
+	}
 
 	// Set up new user
 	user.Username = provider.GetProviderPrefix() + strconv.Itoa(model.GetMaxUserId()+1)
@@ -354,6 +359,12 @@ type OAuthRegistrationDisabledError struct{}
 
 func (e *OAuthRegistrationDisabledError) Error() string {
 	return "registration is disabled"
+}
+
+type OAuthInviteCodeRequiredError struct{}
+
+func (e *OAuthInviteCodeRequiredError) Error() string {
+	return "invite code is required for registration"
 }
 
 type OAuthEmailAlreadyTakenError struct{}

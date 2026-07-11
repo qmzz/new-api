@@ -41,6 +41,21 @@ func TestStatus(c *gin.Context) {
 	return
 }
 
+func GetAccountRateLimitStatus(c *gin.Context) {
+	userId := c.GetInt("id")
+	group, err := model.GetUserGroup(userId, false)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	status, err := middleware.GetAccountRateLimitStatus(userId, group)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": status})
+}
+
 func GetStatus(c *gin.Context) {
 
 	cs := console_setting.GetConsoleSetting()

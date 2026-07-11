@@ -55,6 +55,28 @@ export async function getUserQuotaDates(
 // System Monitoring
 // ----------------------------------------------------------------------------
 
+export interface AccountRateLimitMetric {
+  used: number
+  limit: number
+  remaining: number
+  reset_at: number
+}
+
+export interface AccountRateLimitWindow {
+  key: 'five_hour' | 'weekly'
+  duration_seconds: number
+  total: AccountRateLimitMetric
+  success: AccountRateLimitMetric
+}
+
+export async function getAccountRateLimitStatus() {
+  const res = await api.get<{
+    success: boolean
+    data: AccountRateLimitWindow[]
+  }>('/api/user/rate-limit-status')
+  return res.data
+}
+
 export async function getUserQuotaDataByUsers(params: {
   start_timestamp: number
   end_timestamp: number

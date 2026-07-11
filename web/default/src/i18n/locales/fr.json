@@ -3712,6 +3712,8 @@
     "Request Header Overrides": "Remplacements d'en-têtes de requête",
     "Request ID": "ID de requête",
     "Request Limits": "Limites de requêtes",
+    "Successful requests": "Successful requests",
+    "Total requests": "Total requests",
     "Request Model": "Modèle demandé",
     "Request Model:": "Modèle demandé :",
     "Request overrides, routing behavior, and upstream model automation": "Surcharges de requête, comportement de routage et automatisation des modèles amont",

@@ -3712,6 +3712,8 @@
     "Request Header Overrides": "Переопределения заголовков запроса",
     "Request ID": "ID запроса",
     "Request Limits": "Лимиты запросов",
+    "Successful requests": "Successful requests",
+    "Total requests": "Total requests",
     "Request Model": "Запрошенная модель",
     "Request Model:": "Модель запроса:",
     "Request overrides, routing behavior, and upstream model automation": "Переопределения запросов, маршрутизация и автоматизация upstream-моделей",

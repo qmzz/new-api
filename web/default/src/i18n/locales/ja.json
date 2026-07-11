@@ -3712,6 +3712,8 @@
     "Request Header Overrides": "リクエストヘッダーの上書き",
     "Request ID": "リクエストID",
     "Request Limits": "リクエスト制限",
+    "Successful requests": "Successful requests",
+    "Total requests": "Total requests",
     "Request Model": "リクエストモデル",
     "Request Model:": "リクエストモデル：",
     "Request overrides, routing behavior, and upstream model automation": "リクエスト上書き、ルーティング動作、上流モデル自動化",

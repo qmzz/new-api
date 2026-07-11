@@ -74,6 +74,113 @@ type rateLimitWindow struct {
 	totalBlockedMsg   string
 }
 
+type AccountRateLimitMetric struct {
+	Used      int   `json:"used"`
+	Limit     int   `json:"limit"`
+	Remaining int   `json:"remaining"`
+	ResetAt   int64 `json:"reset_at"`
+}
+
+type AccountRateLimitWindowStatus struct {
+	Key             string                 `json:"key"`
+	DurationSeconds int64                  `json:"duration_seconds"`
+	Total           AccountRateLimitMetric `json:"total"`
+	Success         AccountRateLimitMetric `json:"success"`
+}
+
+func buildRateLimitMetric(used, limit int, resetAt int64) AccountRateLimitMetric {
+	remaining := 0
+	if limit > used {
+		remaining = limit - used
+	}
+	return AccountRateLimitMetric{Used: used, Limit: limit, Remaining: remaining, ResetAt: resetAt}
+}
+
+func redisTotalSnapshot(ctx context.Context, rdb *redis.Client, key string, duration int64) (int, int64, error) {
+	cutoff := time.Now().UnixMilli() - duration*1000
+	if err := rdb.ZRemRangeByScore(ctx, key, "-inf", strconv.FormatInt(cutoff, 10)).Err(); err != nil {
+		return 0, 0, err
+	}
+	count, err := rdb.ZCard(ctx, key).Result()
+	if err != nil || count == 0 {
+		return int(count), 0, err
+	}
+	oldest, err := rdb.ZRangeWithScores(ctx, key, 0, 0).Result()
+	if err != nil || len(oldest) == 0 {
+		return int(count), 0, err
+	}
+	return int(count), int64(oldest[0].Score/1000) + duration, nil
+}
+
+func redisSuccessSnapshot(ctx context.Context, rdb *redis.Client, key string, duration int64) (int, int64, error) {
+	values, err := rdb.LRange(ctx, key, 0, -1).Result()
+	if err != nil {
+		return 0, 0, err
+	}
+	now := time.Now()
+	count := 0
+	var oldest time.Time
+	for _, value := range values {
+		eventTime, parseErr := time.Parse(timeFormat, value)
+		if parseErr != nil || now.Sub(eventTime).Seconds() >= float64(duration) {
+			continue
+		}
+		count++
+		if oldest.IsZero() || eventTime.Before(oldest) {
+			oldest = eventTime
+		}
+	}
+	if oldest.IsZero() {
+		return count, 0, nil
+	}
+	return count, oldest.Unix() + duration, nil
+}
+
+// GetAccountRateLimitStatus returns active long-window limits and usage using
+// the same group overrides and keys as the request middleware.
+func GetAccountRateLimitStatus(userId int, group string) ([]AccountRateLimitWindowStatus, error) {
+	windows := buildRateLimitWindows(strconv.Itoa(userId), group)
+	statuses := make([]AccountRateLimitWindowStatus, 0, 2)
+	ctx := context.Background()
+
+	for _, w := range windows {
+		key := ""
+		switch {
+		case w.memLimiter == &accountFiveHourRateLimiter:
+			key = "five_hour"
+		case w.memLimiter == &accountWeeklyRateLimiter:
+			key = "weekly"
+		default:
+			continue
+		}
+
+		var totalUsed, successUsed int
+		var totalResetAt, successResetAt int64
+		var err error
+		if common.RedisEnabled {
+			totalUsed, totalResetAt, err = redisTotalSnapshot(ctx, common.RDB, w.redisTotalKey, w.durationSeconds)
+			if err == nil {
+				successUsed, successResetAt, err = redisSuccessSnapshot(ctx, common.RDB, w.redisSuccessKey, w.durationSeconds)
+			}
+		} else {
+			w.memLimiter.Init(time.Duration(w.durationMinutes) * time.Minute)
+			totalUsed, totalResetAt = w.memLimiter.Snapshot(w.memTotalKey, w.durationSeconds)
+			successUsed, successResetAt = w.memLimiter.Snapshot(w.memSuccessKey, w.durationSeconds)
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		statuses = append(statuses, AccountRateLimitWindowStatus{
+			Key: key, DurationSeconds: w.durationSeconds,
+			Total: buildRateLimitMetric(totalUsed, w.totalMaxCount, totalResetAt),
+			Success: buildRateLimitMetric(successUsed, w.successMaxCount, successResetAt),
+		})
+	}
+
+	return statuses, nil
+}
+
 // 检查Redis中的请求限制
 func checkRedisRateLimit(ctx context.Context, rdb *redis.Client, key string, maxCount int, durationSeconds int64) (bool, error) {
 	// 如果maxCount为0，表示不限制

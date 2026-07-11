@@ -3712,6 +3712,8 @@
     "Request Header Overrides": "請求頭覆蓋",
     "Request ID": "請求 ID",
     "Request Limits": "請求限制",
+    "Successful requests": "成功請求",
+    "Total requests": "總請求",
     "Request Model": "請求模型",
     "Request Model:": "請求模型：",
     "Request overrides, routing behavior, and upstream model automation": "請求覆蓋、路由行為和上游模型自動化",

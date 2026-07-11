@@ -100,6 +100,10 @@ export function SignUpForm({
   const hasUserAgreement = Boolean(status?.user_agreement_enabled)
   const hasPrivacyPolicy = Boolean(status?.privacy_policy_enabled)
   const requiresLegalConsent = hasUserAgreement || hasPrivacyPolicy
+  const inviteCodeRequired =
+    status?.invite_code_required ??
+    status?.data?.invite_code_required ??
+    false
   const oauthRegisterEnabled =
     status?.oauth_register_enabled ??
     status?.data?.oauth_register_enabled ??
@@ -155,7 +159,7 @@ export function SignUpForm({
     }
 
     // Validate invite code if required
-    if (status?.invite_code_required && !inviteCode.trim()) {
+    if (inviteCodeRequired && !inviteCode.trim()) {
       toast.error(t('An invite code is required to register'))
       return
     }
@@ -358,7 +362,7 @@ export function SignUpForm({
         )}
 
         {/* Invite Code Field */}
-        {status?.invite_code_required && (
+        {inviteCodeRequired && (
           <div className='space-y-2'>
             <Label htmlFor='invite-code'>{t('Invite Code')}</Label>
             <Input

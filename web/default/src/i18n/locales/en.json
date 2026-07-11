@@ -3712,6 +3712,8 @@
     "Request Header Overrides": "Request Header Overrides",
     "Request ID": "Request ID",
     "Request Limits": "Request Limits",
+    "Successful requests": "Successful requests",
+    "Total requests": "Total requests",
     "Request Model": "Request Model",
     "Request Model:": "Request Model:",
     "Request overrides, routing behavior, and upstream model automation": "Request overrides, routing behavior, and upstream model automation",
