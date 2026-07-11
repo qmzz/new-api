@@ -202,9 +202,8 @@ func validateExpiredTime(c *gin.Context, expired int64) (bool, string) {
 }
 
 func ExportRedemptionsCSV(c *gin.Context) {
-	pageInfo := common.GetPageQuery(c)
-	pageInfo.SetPageSize(10000)
-	redemptions, _, err := model.GetAllRedemptions(pageInfo.GetStartIdx(), pageInfo.GetPageSize())
+	const exportLimit = 10000
+	redemptions, _, err := model.GetAllRedemptions(0, exportLimit)
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -213,13 +212,13 @@ func ExportRedemptionsCSV(c *gin.Context) {
 	c.Header("Content-Type", "text/csv; charset=utf-8")
 	c.Header("Content-Disposition", "attachment; filename=redemption_codes.csv")
 	if _, err := c.Writer.Write([]byte{0xEF, 0xBB, 0xBF}); err != nil {
-		logger.SysLog("failed to write redemption csv BOM: " + err.Error())
+		common.SysLog("failed to write redemption csv BOM: " + err.Error())
 		return
 	}
 
 	w := csv.NewWriter(c.Writer)
 	if err := w.Write([]string{"ID", "Name", "Key", "Status", "Quota", "Created", "Expires", "Used By"}); err != nil {
-		logger.SysLog("failed to write redemption csv header: " + err.Error())
+		common.SysLog("failed to write redemption csv header: " + err.Error())
 		return
 	}
 	for _, r := range redemptions {
@@ -248,13 +247,13 @@ func ExportRedemptionsCSV(c *gin.Context) {
 			expiredStr,
 			usedByStr,
 		}); err != nil {
-			logger.SysLog("failed to write redemption csv row: " + err.Error())
+			common.SysLog("failed to write redemption csv row: " + err.Error())
 			return
 		}
 	}
 	w.Flush()
 	if err := w.Error(); err != nil {
-		logger.SysLog("failed to flush redemption csv: " + err.Error())
+		common.SysLog("failed to flush redemption csv: " + err.Error())
 		return
 	}
 }
