@@ -95,9 +95,10 @@ func ClaudeMessagesRequestToOpenAIChat(ctx context.Context, claudeRequest dto.Cl
 		info.SetReasoningEffort(string(effectiveEffort))
 	}
 
-	if len(claudeRequest.StopSequences) == 1 {
-		openAIRequest.Stop = claudeRequest.StopSequences[0]
-	} else if len(claudeRequest.StopSequences) > 1 {
+	// Keep stop as []string even when there is only one sequence. The OpenAI
+	// schema accepts both forms, but OpenAI-compatible upstreams commonly model
+	// stop as []string and reject the scalar form with a 400 bad_params error.
+	if len(claudeRequest.StopSequences) > 0 {
 		openAIRequest.Stop = claudeRequest.StopSequences
 	}
 

@@ -11,6 +11,34 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestClaudeMessagesRequestToOpenAIChatKeepsStopSequencesAsArray(t *testing.T) {
+	tests := []struct {
+		name          string
+		stopSequences []string
+		want          any
+	}{
+		{name: "no stop sequences", stopSequences: nil, want: nil},
+		{name: "one stop sequence", stopSequences: []string{"END"}, want: []string{"END"}},
+		{name: "multiple stop sequences", stopSequences: []string{"END", "STOP"}, want: []string{"END", "STOP"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ClaudeMessagesRequestToOpenAIChat(context.Background(), dto.ClaudeRequest{
+				Model:         "claude-test",
+				MaxTokens:     lo.ToPtr(uint(64)),
+				Messages:      []dto.ClaudeMessage{{Role: "user", Content: "hello"}},
+				StopSequences: tt.stopSequences,
+			}, &convmeta.Values{})
+			require.NoError(t, err)
+			require.Equal(t, tt.want, got.Stop)
+			if tt.want != nil {
+				require.IsType(t, []string{}, got.Stop)
+			}
+		})
+	}
+}
+
 func TestClaudeMessagesRequestToOpenAIChatToolResultContent(t *testing.T) {
 	const imageData = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
 	const dataURL = "data:image/png;base64," + imageData
